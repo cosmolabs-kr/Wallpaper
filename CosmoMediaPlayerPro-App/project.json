@@ -1,0 +1,13 @@
+{
+	"contentrating": "Everyone",
+	"description": "Cosmo Media Player Pro - App Edition. Adds play/pause, next and previous buttons, real audio capture and an in-wallpaper settings panel.",
+	"file": "CosmoPlayer.exe",
+	"preview": "preview.gif",
+	"tags": [
+		"Music"
+	],
+	"title": "Cosmo Media Player Pro - App Edition",
+	"type": "application",
+	"version": 1,
+	"visibility": "private"
+}

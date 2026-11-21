@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cosmo Media Player Pro</title>
+<!-- App edition: js/bridge.js is injected by CosmoPlayer.exe before these scripts run. -->
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="bg"></canvas>
+  <canvas id="dust"></canvas>
+
+  <div id="stage">
+    <div class="rig" id="rig">
+      <div id="player" class="player is-idle no-timeline">
+        <div class="ambient" id="ambient"></div>
+        <div class="glass"></div>
+
+        <div class="vinyl">
+          <div class="vinyl-disc">
+            <div class="vinyl-label" id="vinylLabel"></div>
+            <div class="vinyl-hole"></div>
+          </div>
+          <div class="vinyl-sheen"></div>
+        </div>
+
+        <div class="cover">
+          <div class="cover-empty">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17.5V6.2l10-2v11.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.5" cy="17.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="16.5" cy="15.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+          </div>
+          <img class="cover-img" id="coverA" alt="">
+          <img class="cover-img" id="coverB" alt="">
+          <div class="cover-gloss"></div>
+        </div>
+
+        <div class="info">
+          <div class="status">
+            <span class="pulse"><i></i><i></i><i></i></span>
+            <span id="statusText"></span>
+          </div>
+          <div class="meta" id="meta">
+            <h1 id="title"></h1>
+            <p class="artist" id="artist"></p>
+            <p class="album" id="album"></p>
+          </div>
+          <div class="spacer"></div>
+          <div class="timeline">
+            <span id="tCur">0:00</span>
+            <div class="bar"><div class="fill" id="tFill"></div></div>
+            <span id="tDur">0:00</span>
+          </div>
+          <canvas id="spectrum"></canvas>
+          <div class="controls" id="controls">
+            <button data-cmd="prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 5h2.2v14H6zM20 5v14L9.5 12z"/></svg></button>
+            <button data-cmd="playpause" class="pp" aria-label="Play or pause"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 4.5v15l12-7.5z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M6.5 4.5h4v15h-4zM13.5 4.5h4v15h-4z"/></svg></button>
+            <button data-cmd="next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M15.8 5H18v14h-2.2zM4 5v14l10.5-7z"/></svg></button>
+            <button data-ui="settings" class="gear" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.3 7.3 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.3 7.3 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.3 7.3 0 0 0 1.7 1l.4 2.5h4l.4-2.5a7.3 7.3 0 0 0 1.7-1l2.4 1 2-3.4zM13 15.2a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4z"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <div id="analyzer" class="analyzer">
+        <div class="glass"></div>
+        <div class="an-body">
+          <div class="an-main">
+            <div class="an-head"><span>Stereo spectrum</span><span>L &#9650; &middot; R &#9660;</span></div>
+            <canvas id="anSpectrum"></canvas>
+            <div class="an-head an-head2"><span>Spectrogram</span><span>Low &rarr; High</span></div>
+            <canvas id="anGram" width="420" height="64"></canvas>
+            <div class="an-head an-head2"><span>Loudness</span><span>30 s</span></div>
+            <canvas id="anLoud"></canvas>
+            <div class="an-device" id="anDevice"></div>
+          </div>
+          <div class="an-side">
+            <div class="an-tempo">
+              <span class="an-label">Tempo</span>
+              <div class="an-bpm"><i id="anBeat"></i><b id="anBpm">--</b><span>BPM</span></div>
+            </div>
+            <div class="an-meters">
+              <div class="an-row"><span>L</span><div class="an-meter"><div id="anL"></div><i id="anLp"></i></div></div>
+              <div class="an-row"><span>R</span><div class="an-meter"><div id="anR"></div><i id="anRp"></i></div></div>
+              <div class="an-row"><span>Bal</span><div class="an-meter an-bal"><i id="anBal"></i></div></div>
+              <div class="an-row"><span>Wid</span><div class="an-meter"><div id="anWid"></div></div></div>
+            </div>
+            <div class="an-stats">
+              <div><b id="anLow">0</b><span>Low</span></div>
+              <div><b id="anMid">0</b><span>Mid</span></div>
+              <div><b id="anHigh">0</b><span>High</span></div>
+              <div><b id="anBright">0</b><span>Bright</span></div>
+              <div><b id="anDr">--</b><span>DR dB</span></div>
+              <div><b id="anSim">--</b><span>L/R sim</span></div>
+              <div><b id="anPeak">--</b><span>Peak</span></div>
+              <div><b id="anLeft">--</b><span>Left</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="lyrics">
+    <div id="lyCur"></div>
+    <div id="lyNext"></div>
+  </div>
+
+  <div id="clock">
+    <div id="clockDate"></div>
+    <div id="clockTime"></div>
+  </div>
+
+  <span id="titleMeasure" aria-hidden="true"></span>
+
+  <!-- Scripts stay at the end of <body>: Wallpaper Engine requires listeners to be
+       registered synchronously here, not in window.onload. -->
+  <script src="js/palette.js"></script>
+  <script src="js/flow.js"></script>
+  <script src="js/analyzer.js"></script>
+  <script src="js/lyrics.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/settings.js"></script>
+</body>
+</html>
