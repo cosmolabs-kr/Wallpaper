@@ -106,8 +106,12 @@ namespace CosmoPlayer
 
         private int busy;
 
+        /// <summary>While paused nothing is analysed or sent to the page.</summary>
+        public volatile bool Paused;
+
         private void Tick()
         {
+            if (Paused) return;
             if (Interlocked.Exchange(ref busy, 1) == 1) return;
             try
             {

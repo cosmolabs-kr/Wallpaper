@@ -66,9 +66,15 @@ namespace CosmoPlayer
                     Log.Write("stub: worker pid " + pid + (err != null ? " error: " + err : ""));
                     if (pid != 0)
                     {
+                        // Heartbeat. Wallpaper Engine pauses an application wallpaper by suspending
+                        // this process; the worker is not its child and keeps running. So this
+                        // process signals "still running" several times a second, and the worker
+                        // stops drawing when the signal stops coming.
+                        using (var beat = new System.Threading.EventWaitHandle(false, System.Threading.EventResetMode.AutoReset,
+                                   Native.HeartbeatName(System.Diagnostics.Process.GetCurrentProcess().Id)))
                         using (var worker = System.Diagnostics.Process.GetProcessById(pid))
                         {
-                            worker.WaitForExit();
+                            do { beat.Set(); } while (!worker.WaitForExit(250));
                             Log.Write("stub: worker exited");
                         }
                     }
@@ -140,7 +146,7 @@ namespace CosmoPlayer
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             if (m.Success && long.TryParse(m.Groups[1].Value, out long h) && Native.IsWindow(new IntPtr(h)))
                 hostWindow = new IntPtr(h);
-            var sm = System.Text.RegularExpressions.Regex.Match(cmd, @"--stubs+(d+)");
+            var sm = System.Text.RegularExpressions.Regex.Match(cmd, @"--stub\s+(\d+)");
             if (sm.Success) int.TryParse(sm.Groups[1].Value, out stubPid);
             Log.Write("start: [" + cmd + "] host=" + hostWindow);
 
@@ -222,16 +228,28 @@ namespace CosmoPlayer
             Native.SetWindowLongPtr(Handle, Native.GWL_STYLE, new IntPtr(style));
             Native.SetParent(Handle, hostWindow);
             FitHost();
-            fitTimer = new Timer { Interval = 1000 };
+            lastBeatAt = Environment.TickCount;
+            fitTimer = new Timer { Interval = 400 };
             fitTimer.Tick += (s, e) =>
             {
-                if (!Native.IsWindow(hostWindow)) { Close(); return; }   // the wallpaper was closed
+                if (!Native.IsWindow(hostWindow) || StubGone())                       // the wallpaper was closed
+                {
+                    Log.Write("closing: " + (Native.IsWindow(hostWindow) ? "stub process ended" : "host window gone"));
+                    Close(); return;
+                }
                 FitHost();
                 // Wallpaper Engine pauses an application wallpaper by suspending the process it
-                // started - the stub. Follow it: stop drawing while the stub is suspended, so
-                // the user's pause rules (full-screen game, battery, ...) keep working.
-                bool paused = StubSuspended();
-                if (web.Visible == paused) { web.Visible = !paused; Log.Write(paused ? "paused" : "resumed"); }
+                // started - the stub. Follow it: stop drawing while the stub's heartbeat is
+                // missing, so the user's pause rules (other window in front, full-screen game,
+                // battery, ...) keep working.
+                if (stubBeat == null && stubPid != 0)
+                {
+                    try { stubBeat = System.Threading.EventWaitHandle.OpenExisting(Native.HeartbeatName(stubPid)); Log.Write("heartbeat connected"); }
+                    catch (Exception ex) { if (!beatErrorLogged) { beatErrorLogged = true; Log.Write("heartbeat not available yet: " + ex.Message); } }
+                }
+                if (stubBeat == null) return;
+                if (stubBeat.WaitOne(0)) lastBeatAt = Environment.TickCount;
+                SetPaused(Environment.TickCount - lastBeatAt > 1500);
             };
             fitTimer.Start();
 
@@ -252,20 +270,60 @@ namespace CosmoPlayer
             }
         }
 
-        private bool StubSuspended()
+        private System.Threading.EventWaitHandle stubBeat;
+        private int lastBeatAt;
+        private bool beatErrorLogged;
+        private bool isPaused;
+        private System.Diagnostics.Process stubProcess;
+
+        /// <summary>Has the process Wallpaper Engine started ended? Then the wallpaper is over.</summary>
+        private bool StubGone()
         {
             if (stubPid == 0) return false;
             try
             {
-                using (var stub = System.Diagnostics.Process.GetProcessById(stubPid))
+                if (stubProcess == null) stubProcess = System.Diagnostics.Process.GetProcessById(stubPid);
+                return stubProcess.HasExited;
+            }
+            catch { return true; }
+        }
+
+        /// <summary>
+        /// Paused: keep a still picture of the last frame on screen and switch the browser
+        /// view off, so nothing is drawn and the GPU is left alone. Resumed: back to live.
+        /// </summary>
+        private async void SetPaused(bool pause)
+        {
+            if (pause == isPaused) return;
+            isPaused = pause;
+            Log.Write(pause ? "paused" : "resumed");
+            try
+            {
+                if (pause)
                 {
-                    if (stub.Threads.Count == 0) return false;
-                    foreach (System.Diagnostics.ProcessThread t in stub.Threads)
-                        if (t.ThreadState != System.Diagnostics.ThreadState.Wait || t.WaitReason != System.Diagnostics.ThreadWaitReason.Suspended) return false;
-                    return true;
+                    if (audio != null) audio.Paused = true;
+                    try
+                    {
+                        using (var ms = new MemoryStream())
+                        {
+                            await web.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Jpeg, ms);
+                            var old = BackgroundImage;
+                            BackgroundImage = Image.FromStream(new MemoryStream(ms.ToArray()));
+                            BackgroundImageLayout = ImageLayout.Stretch;
+                            old?.Dispose();
+                        }
+                    }
+                    catch (Exception ex) { Log.Write("pause snapshot: " + ex.Message); }
+                    if (isPaused) web.Visible = false;       // unless it was resumed meanwhile
+                }
+                else
+                {
+                    web.Visible = true;
+                    if (audio != null) audio.Paused = false;
+                    media?.Resync();
                 }
             }
-            catch { return false; }      // the stub is gone; the host window check closes us
+            catch (Exception ex) { Log.Write("pause/resume: " + ex.Message); }
         }
 
         private void FitHost()
@@ -567,6 +625,9 @@ namespace CosmoPlayer
         }
 
         [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool IsProcessDPIAware();
+
+        /// <summary>Name of the "stub is running" signal shared by the stub and its worker.</summary>
+        public static string HeartbeatName(int stubPid) { return "Local\\CosmoPlayer.Heartbeat." + stubPid; }
         [System.Runtime.InteropServices.DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
         [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
         [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool IsChild(IntPtr parent, IntPtr child);
