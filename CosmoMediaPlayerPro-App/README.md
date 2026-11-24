@@ -10,9 +10,10 @@ The Workshop version of Cosmo Media Player Pro is a *web* wallpaper, and Wallpap
 
 - **Play / pause, next and previous buttons** that control the current player (Apple Music, Spotify, browsers – anything that shows up in the Windows media overlay)
 - **Real audio capture** from your output device: true frequency bands, plus the device name, sample rate and bit depth in the analyzer panel
-- **Settings panel inside the wallpaper** (gear button on the card): colors, size and position, analyzer, lyrics, clock, and language (Auto / English / 한국어 / 中文)
+- **Settings panel inside the wallpaper** (gear button on the card): colors, your own background image, size and position, analyzer, lyrics, clock (position, size, font, glass box), and language (Auto / English / 한국어 / 中文)
+- **Update notice**: when a newer release is out, the gear button gets a red dot and the settings panel shows a button that opens the download page
 
-Everything else is the same: album-color background, glass card with vinyl deck, analyzer panel (stereo spectrum, spectrogram, loudness, tempo), karaoke-style synced lyrics, clock.
+Everything else is the same: album-color background, glass card with vinyl deck, analyzer panel (stereo spectrum, spectrogram, loudness, tempo with beat position and confidence, tonal balance), karaoke-style synced lyrics, clock.
 
 ## Requirements
 
@@ -27,7 +28,7 @@ Everything else is the same: album-color background, glass card with vinyl deck,
 3. Extract it to a folder that will stay where it is, for example `Documents\Wallpapers\CosmoMediaPlayerPro_App`.
 4. In Wallpaper Engine, click **Open Wallpaper → Open from File** (bottom left) and pick `project.json` from that folder – or simply drag `project.json` onto the Wallpaper Engine window.
 
-To update, close the wallpaper in Wallpaper Engine, replace the folder's contents with the new release, and open it again. Your settings are kept.
+To update, close the wallpaper in Wallpaper Engine, replace the folder's contents with the new release, and open it again. Your settings are kept. The wallpaper tells you when a new release is out (see "Good to know"); it never downloads or installs anything by itself.
 
 ## Using it
 
@@ -43,7 +44,9 @@ This is a program, not a web page, and it does a few things you should know abou
 - It **watches the mouse position and left clicks** while the pointer is over the bare desktop. A wallpaper sits underneath the desktop icons and receives no mouse input from Windows, so this is the only way buttons on a wallpaper can work. Nothing is recorded or sent anywhere.
 - It **listens to what your default output device is playing** (loopback capture) to draw the spectrum. The audio is analysed in memory only.
 - It **starts a second copy of itself** next to the one Wallpaper Engine starts. Wallpaper Engine takes over the windows of the program it launches, which breaks the WebView2 component that draws the wallpaper; the second copy does the drawing and closes together with the wallpaper.
-- The only network request is the lyrics lookup: track title and artist are sent to [lrclib.net](https://lrclib.net). Turn **Karaoke lyrics** off in the settings to stop it.
+- It makes two kinds of network request, and both can be turned off in the settings:
+  - **Lyrics lookup**: track title and artist are sent to [lrclib.net](https://lrclib.net) (option *Karaoke lyrics*).
+  - **Update check**: it asks github.com for this repository's latest release number at start and about once a day (option *Check for updates*). Nothing about you or your music is sent.
 
 Some antivirus products are suspicious of unsigned programs that do the first and third of these. The full source is in this repository if you prefer to check or build it yourself.
 

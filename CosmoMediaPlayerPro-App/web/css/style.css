@@ -130,6 +130,19 @@ body.no-blur .glass {
   transition: opacity .9s ease, transform 1.4s cubic-bezier(.2, .8, .2, 1);
 }
 .cover-img.show { opacity: 1; transform: scale(1); }
+/* A cover that is not square is shown whole ("fit") over a blurred, darkened copy of
+   itself, rather than cropped: cropping a small 16:9 thumbnail to a square enlarges it
+   almost twice as much and throws half of it away. */
+.cover-img.fit { object-fit: contain; }
+.cover-fill {
+  position: absolute;
+  inset: -14%;
+  background: center / cover no-repeat;
+  filter: blur(calc(.9 * var(--u))) brightness(.7) saturate(1.25);
+  opacity: 0;
+  transition: opacity .9s ease;
+}
+.cover-fill.show { opacity: 1; }
 .cover-gloss {
   position: absolute;
   inset: 0;
@@ -250,6 +263,10 @@ body.no-blur .glass {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Room for descenders (g, y, p): the clipping box would otherwise cut them off.
+     The negative margin gives the space back, so nothing below moves. */
+  padding-bottom: .16em;
+  margin-bottom: -.16em;
 }
 /* Titles wider than the widest card wrap to two smaller lines. */
 .player.title-long #title {
@@ -264,6 +281,8 @@ body.no-blur .glass {
 
 .artist, .album {
   margin: 0;
+  padding-bottom: .1em;
+  margin-bottom: -.1em;
   line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
@@ -396,14 +415,50 @@ body.hide-idle .player.is-idle + .analyzer { opacity: 0; }
   min-width: 3ch;
   text-align: right;
 }
-#anBeat {
-  align-self: center;
-  width: calc(.5 * var(--u));
-  height: calc(.5 * var(--u));
+/* Beat position in the bar: four dots, the first one marks the strongest beat. */
+.an-bpm { position: relative; }
+.an-beats { align-self: center; display: flex; align-items: center; gap: calc(.28 * var(--u)); margin-right: calc(.2 * var(--u)); }
+.an-beats i {
+  width: calc(.38 * var(--u));
+  height: calc(.38 * var(--u));
   border-radius: 50%;
   background: rgb(var(--accent));
   opacity: .15;
 }
+.an-beats i:first-child { width: calc(.5 * var(--u)); height: calc(.5 * var(--u)); }
+/* Tempo confidence: how steady the estimate has been. */
+.an-conf {
+  position: absolute;
+  right: 0;
+  bottom: calc(-.5 * var(--u));
+  width: calc(5.2 * var(--u));
+  height: calc(.14 * var(--u));
+  min-height: 2px;
+  border-radius: 99px;
+  background: rgba(var(--fg), .13);
+  overflow: hidden;
+}
+.an-conf > div { width: 100%; height: 100%; background: rgb(var(--accent)); transform-origin: right; transform: scaleX(0); transition: transform .6s ease; }
+#anBpm { transition: opacity .6s ease; }
+
+/* Overload lamp at the end of the L / R meters. */
+.an-over {
+  width: calc(.32 * var(--u));
+  height: calc(.32 * var(--u));
+  min-width: 3px;
+  min-height: 3px;
+  border-radius: 50%;
+  background: rgba(var(--fg), .16);
+  transition: background .5s ease, box-shadow .5s ease;
+}
+.an-over.on { background: #ff4d3d; box-shadow: 0 0 calc(.5 * var(--u)) rgba(255, 77, 61, .8); transition-duration: 0s; }
+/* Rows without a lamp keep the same meter length. */
+.an-row:not(:has(.an-over))::after { content: ""; width: calc(.32 * var(--u)); min-width: 3px; }
+
+/* Tonal balance curve */
+.an-tone { grid-column: 1 / -1; gap: calc(.2 * var(--u)) !important; }
+#anTone { display: block; width: 100%; height: calc(1.25 * var(--u)); }
+.an-tone-cap { display: flex; flex-direction: row !important; justify-content: space-between; }
 
 .an-meters { display: grid; gap: calc(.42 * var(--u)); }
 .an-row { display: flex; align-items: center; gap: calc(.6 * var(--u)); }
@@ -496,23 +551,33 @@ body.hide-lyrics #lyrics { display: none; }
 
 /* ───────── Clock ───────── */
 #clock {
+  /* --cx / --cy: 0..1 across the screen (1, 1 = bottom right, the original place).
+     The element is shifted by the same fraction of its own size, so it always stays
+     inside the margins whatever its size. */
+  --cx: 1;
+  --cy: 1;
+  --cs: 1;
+  --mx: calc(3.2 * var(--b));
+  --my: calc(4.6 * var(--b));
   position: fixed;
-  right: calc(3.2 * var(--b));
-  bottom: calc(4.6 * var(--b));
+  left: calc(var(--mx) + (100% - 2 * var(--mx)) * var(--cx));
+  top: calc(var(--my) + (100% - 2 * var(--my)) * var(--cy));
+  transform: translate(calc(-100% * var(--cx)), calc(-100% * var(--cy)));
   text-align: right;
+  white-space: nowrap;
   color: rgba(var(--fg), .8);
   pointer-events: none;
   transition: opacity .8s ease, color 1.2s ease;
 }
 body.hide-clock #clock { opacity: 0; }
 #clockDate {
-  font-size: calc(1.05 * var(--b));
+  font-size: calc(1.05 * var(--b) * var(--cs));
   font-weight: 550;
   letter-spacing: .04em;
   opacity: .75;
 }
 #clockTime {
-  font-size: calc(4.8 * var(--b));
+  font-size: calc(4.8 * var(--b) * var(--cs));
   font-weight: 250;
   line-height: 1.05;
   letter-spacing: -.02em;
@@ -580,7 +645,8 @@ body.app .controls {
   position: fixed;
   left: 3vh;
   top: 50%;
-  width: 46vh;
+  width: 92vh;
+  max-width: calc(100vw - 6vh);
   transform: translateY(-50%) translateX(-4vh);
   padding: 2vh 2.2vh 1.6vh;
   border-radius: 2.2vh;
@@ -601,7 +667,7 @@ body.app .controls {
 .st-head span { flex: 1; }
 .st-text { border: 0; cursor: pointer; font: inherit; font-size: 1.35vh; font-weight: 600; color: inherit; padding: .5vh 1.1vh; border-radius: 1vh; background: rgba(var(--fg), .1); }
 .st-text.hover, .st-text:hover { background: rgba(var(--fg), .22); }
-.st-row { display: flex; align-items: center; gap: 1.2vh; height: 3.15vh; transition: opacity .2s ease; }
+.st-row { display: flex; align-items: center; gap: 1.2vh; height: 2.85vh; transition: opacity .2s ease; }
 .st-row.off { opacity: .35; }
 .st-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: rgba(var(--fg), .82); }
 .st-val { width: 5.5vh; text-align: right; font-variant-numeric: tabular-nums; color: rgba(var(--fg), .6); }
@@ -619,3 +685,57 @@ body.app .controls {
   background: linear-gradient(90deg, rgba(var(--fg), .8) calc(var(--v) * 100%), rgba(var(--fg), .16) calc(var(--v) * 100%)); }
 .st-track i { position: absolute; top: 50%; left: calc(var(--v) * (100% - 1.5vh)); width: 1.5vh; height: 1.5vh; margin-top: -.75vh; border-radius: 50%; background: rgb(var(--fg)); transition: transform .1s ease; }
 .st-track.hover i { transform: scale(1.25); }
+
+/* ───────── Custom background image ───────── */
+#bgImage {
+  --dim: .25;
+  --blur: 0px;
+  position: fixed;
+  /* Blurring fades the edges to transparent: overshoot the screen so that stays outside. */
+  inset: calc(var(--blur) * -2);
+  background: center / cover no-repeat;
+  filter: blur(var(--blur));
+  opacity: 0;
+  transition: opacity .8s ease;
+  pointer-events: none;
+}
+#bgImage::after { content: ""; position: absolute; inset: 0; background: rgba(0, 0, 0, var(--dim)); }
+body.has-bgimage #bgImage { opacity: 1; }
+/* Over a photo the album palette says nothing about what is behind the text:
+   lyrics and clock go white with a dark halo, which reads on a dimmed image. */
+body.has-bgimage #lyrics { --fg: 246, 247, 250; --halo: 0, 0, 0 !important; }
+body.has-bgimage:not(.clock-glass) #clock { --fg: 246, 247, 250; text-shadow: 0 0 calc(1.2 * var(--b)) rgba(0, 0, 0, .55); }
+
+body.hide-paused .player.is-paused { opacity: 0; }
+body.hide-paused .player.is-paused + .analyzer { opacity: 0; }
+
+/* Settings panel: file row */
+.st-file { display: flex; gap: .4vh; }
+
+/* ───────── Clock options ───────── */
+#clock.align-left { text-align: left; }
+#clock.align-center { text-align: center; }
+body.clock-glass #clock {
+  padding: calc(1.1 * var(--b) * var(--cs)) calc(1.7 * var(--b) * var(--cs));
+  border-radius: calc(1.6 * var(--b) * var(--cs));
+  background: rgba(var(--glass), var(--glass-a, .46));
+  -webkit-backdrop-filter: blur(calc(2.2 * var(--b))) saturate(1.5);
+  backdrop-filter: blur(calc(2.2 * var(--b))) saturate(1.5);
+  box-shadow: 0 calc(1.2 * var(--b)) calc(3.5 * var(--b)) rgba(0, 0, 0, .18), inset 0 0 0 1px rgba(255, 255, 255, var(--edge-a, .3));
+}
+body.clock-glass.no-blur #clock { -webkit-backdrop-filter: none; backdrop-filter: none; }
+#clock[data-font="condensed"] { font-family: "Bahnschrift", "Segoe UI", sans-serif; font-stretch: 80%; }
+#clock[data-font="mono"] { font-family: "Cascadia Mono", "Consolas", "Courier New", monospace; }
+#clock[data-font="mono"] #clockTime { letter-spacing: -.06em; }
+#clock[data-font="serif"] { font-family: "Georgia", "Cambria", "Times New Roman", serif; }
+#clock[data-font="rounded"] { font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; }
+#clock[data-font="rounded"] #clockTime { font-weight: 600; }
+
+/* Two columns of options; a row never splits across them. */
+.st-list { column-count: 2; column-gap: 4vh; }
+.st-list .st-row { break-inside: avoid; }
+
+/* Update notice */
+.controls .gear.has-update { opacity: 1; position: relative; }
+.controls .gear.has-update::after { content: ""; position: absolute; right: 12%; top: 12%; width: 22%; height: 22%; border-radius: 50%; background: #ff4d3d; }
+.st-update { background: rgb(var(--accent)); color: rgb(var(--glass)); }

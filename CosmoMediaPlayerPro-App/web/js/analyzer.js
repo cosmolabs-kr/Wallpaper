@@ -21,7 +21,13 @@ window.Analyzer = (function () {
   var env = new Float32Array(ENV), envT = new Float64Array(ENV), envN = 0, envI = 0;
   var lastTempoAt = 0, lastStoreAt = 0;
   var fluxAvg = 0, beat = 0, lastBeatAt = 0;
-  var bpmHist = [], bpmShown = 0;
+  var bpmHist = [], bpmShown = 0, bpmConf = 0;
+  /* ── beat position: a clock locked to the detected onsets ── */
+  var beatT0 = 0, beatMiss = 0, barAcc = [0, 0, 0, 0];
+  /* ── tonal balance: the spectrum averaged over ~10 s ── */
+  var tone = new Float32Array(N), toneAt = 0;
+  var tc = $('anTone'), tctx = tc.getContext('2d'), tcW = 0, tcH = 0;
+  var overL = -1e9, overR = -1e9;
 
   /* ── spectrogram ── */
   var gram = $('anGram'), gctx = gram.getContext('2d', { willReadFrequently: false });
@@ -33,10 +39,9 @@ window.Analyzer = (function () {
   var spW = 0, spH = 0, sizeAt = -1e9;
 
   var el = {
-    bpm: $('anBpm'), beat: $('anBeat'),
+    bpm: $('anBpm'), beats: $('anBeats').children, conf: $('anConf'), lo: $('anLo'), ro: $('anRo'), tilt: $('anTilt'),
     l: $('anL'), r: $('anR'), lp: $('anLp'), rp: $('anRp'),
     bal: $('anBal'), wid: $('anWid'),
-    low: $('anLow'), mid: $('anMid'), high: $('anHigh'), bright: $('anBright'),
     dr: $('anDr'), sim: $('anSim'), peak: $('anPeak'), left: $('anLeft')
   };
   var m = { l: 0, r: 0, lp: 0, rp: 0, lpAt: 0, rpAt: 0, bal: 0, wid: 0, low: 0, mid: 0, high: 0, bright: 0,
@@ -131,10 +136,71 @@ window.Analyzer = (function () {
     }
 
     fluxAvg += (flux - fluxAvg) * 0.05;
-    if (flux > fluxAvg * 1.7 + 0.03 && now - lastBeatAt > 220) { beat = 1; lastBeatAt = now; }
+    if (flux > fluxAvg * 1.7 + 0.03 && now - lastBeatAt > 220) { beat = 1; lastBeatAt = now; onOnset(now, flux); }
 
     if (now - lastColAt >= 28) { pushColumn(); lastColAt = now; }
     if (now - lastTempoAt > 1000) { lastTempoAt = now; estimateTempo(); }
+  }
+
+  /* Keeps the beat clock in step with the music: an onset close to where a beat was
+     expected pulls the clock slightly towards it; a run of onsets that do not fit means
+     the clock is wrong, so it starts over. Which beat is "1" cannot be known from the
+     spectrum, so the beat that has carried the most low-end energy is taken as the first. */
+  function onOnset(now, strength) {
+    if (!bpmShown) { beatT0 = 0; return; }
+    var period = 60000 / bpmShown;
+    if (!beatT0) { beatT0 = now; beatMiss = 0; barAcc = [0, 0, 0, 0]; return; }
+    var ph = (now - beatT0) / period, k = Math.round(ph), off = ph - k;
+    if (Math.abs(off) < 0.22) {
+      beatT0 += off * period * 0.3;
+      beatMiss = 0;
+      var idx = ((k % 4) + 4) % 4;
+      for (var i = 0; i < 4; i++) barAcc[i] *= 0.97;
+      barAcc[idx] += strength;
+    } else if (++beatMiss > 5) { beatT0 = now; beatMiss = 0; barAcc = [0, 0, 0, 0]; }
+  }
+
+  function drawTone() {
+    if (!tcW || !tcH) return;
+    tctx.clearRect(0, 0, tcW, tcH);
+    var i, v = new Float32Array(N), max = 0;
+    for (i = 0; i < N; i++) {
+      // 5-band smoothing: the curve is about the overall shape, not single bands.
+      var a = 0, n = 0;
+      for (var j = -2; j <= 2; j++) { var q = i + j; if (q >= 0 && q < N) { a += tone[q] * (1 + q / N * 1.6); n++; } }
+      v[i] = a / n;
+      if (v[i] > max) max = v[i];
+    }
+    if (max < 0.02) { el.tilt.textContent = '--'; return; }
+    var fgS = fg[0] + ',' + fg[1] + ',' + fg[2];
+    var pad = Math.max(1, tcH * 0.1), usable = tcH - pad * 2;
+    // Least-squares line through the curve = the tilt (bass-heavy <-> treble-heavy).
+    var sx = 0, sy = 0, sxy = 0, sxx = 0;
+    tctx.beginPath();
+    for (i = 0; i < N; i++) {
+      var y = v[i] / max;
+      sx += i; sy += y; sxy += i * y; sxx += i * i;
+      var px = i / (N - 1) * tcW, py = pad + (1 - y) * usable;
+      if (i === 0) tctx.moveTo(px, py); else tctx.lineTo(px, py);
+    }
+    tctx.lineWidth = Math.max(1, tcH * 0.06);
+    tctx.lineJoin = 'round';
+    tctx.strokeStyle = 'rgba(' + fgS + ',.85)';
+    tctx.stroke();
+    tctx.lineTo(tcW, tcH); tctx.lineTo(0, tcH); tctx.closePath();
+    tctx.fillStyle = 'rgba(' + fgS + ',.12)';
+    tctx.fill();
+    var slope = (N * sxy - sx * sy) / (N * sxx - sx * sx), icpt = (sy - slope * sx) / N;
+    tctx.strokeStyle = 'rgb(' + accent[0] + ',' + accent[1] + ',' + accent[2] + ')';
+    tctx.lineWidth = Math.max(1, tcH * 0.04);
+    tctx.setLineDash([Math.max(2, tcW * 0.012), Math.max(2, tcW * 0.012)]);
+    tctx.beginPath();
+    tctx.moveTo(0, pad + (1 - icpt) * usable);
+    tctx.lineTo(tcW, pad + (1 - (icpt + slope * (N - 1))) * usable);
+    tctx.stroke();
+    tctx.setLineDash([]);
+    var tilt = slope * (N - 1);                    // change across the whole range, -1..1
+    el.tilt.textContent = "Tilt " + (tilt > 0 ? "+" : "") + Math.round(tilt * 100);
   }
 
   function pushColumn() {
@@ -184,7 +250,7 @@ window.Analyzer = (function () {
     mean /= n;
     var r0 = 0;
     for (i = 0; i < n; i++) { x[i] -= mean; r0 += x[i] * x[i]; }
-    if (r0 < 1e-4) { bpmHist.length = 0; bpmShown = 0; return; }
+    if (r0 < 1e-4) { bpmHist.length = 0; bpmShown = 0; bpmConf = 0; return; }
 
     var lagMin = Math.max(2, Math.floor(60 / (200 * dtAvg)));
     var lagMax = Math.min(n - 20, Math.ceil(60 / (60 * dtAvg)));
@@ -202,7 +268,7 @@ window.Analyzer = (function () {
       var score = rs[lag] / r0n * Math.exp(-0.5 * (o / 0.8) * (o / 0.8));
       if (score > bestScore && rs[lag] >= rs[lag - 1] && rs[lag] >= rs[lag + 1]) { bestScore = score; best = lag; }
     }
-    if (best < 0 || rs[best] / r0n < 0.1) { return; }
+    if (best < 0 || rs[best] / r0n < 0.1) { bpmConf *= 0.8; return; }   // no clear pulse right now
     // Parabolic interpolation around the peak for sub-frame lag.
     var a = rs[best - 1], b = rs[best], c = rs[best + 1];
     var den = a - 2 * b + c;
@@ -211,7 +277,13 @@ window.Analyzer = (function () {
     bpmHist.push(est);
     if (bpmHist.length > 7) bpmHist.shift();
     var sorted = bpmHist.slice().sort(function (p, q) { return p - q; });
+    var before = bpmShown;
     bpmShown = sorted[Math.floor(sorted.length / 2)];
+    // Confidence: how closely the recent estimates agree, and how many there are yet.
+    var dev = bpmHist.map(function (v) { return Math.abs(v - bpmShown); }).sort(function (p, q) { return p - q; });
+    var mad = dev[Math.floor(dev.length / 2)] / bpmShown;
+    bpmConf = clamp01(1 - mad / 0.04) * Math.min(1, bpmHist.length / 5);
+    if (before && Math.abs(before - bpmShown) / bpmShown > 0.04) beatT0 = 0;   // tempo changed: re-lock the beat clock
   }
 
   function size(now) {
@@ -222,6 +294,8 @@ window.Analyzer = (function () {
     if (w && h && (w !== spW || h !== spH)) { sp.width = spW = w; sp.height = spH = h; }
     w = Math.round(lc.clientWidth * dpr); h = Math.round(lc.clientHeight * dpr);
     if (w && h && (w !== lcW || h !== lcH)) { lc.width = lcW = w; lc.height = lcH = h; }
+    w = Math.round(tc.clientWidth * dpr); h = Math.round(tc.clientHeight * dpr);
+    if (w && h && (w !== tcW || h !== tcH)) { tc.width = tcW = w; tc.height = tcH = h; }
   }
 
   function shape(v, i) { return Math.pow(clamp01(v * (1 + i / N * 1.6)), 0.82); }
@@ -275,6 +349,7 @@ window.Analyzer = (function () {
     var up = 1 - Math.exp(-dt * 30), down = 1 - Math.exp(-dt * 8);
     var sumL = 0, sumR = 0, diff = 0, wsum = 0, low = 0, midE = 0, high = 0, i;
     var dotLR = 0, sqL = 0, sqR = 0, top = 0, topI = -1;
+    var toneK = 1 - Math.exp(-dt / 10);
 
     for (i = 0; i < N; i++) {
       var a = silent ? 0 : tL[i], b = silent ? 0 : tR[i];
@@ -289,12 +364,16 @@ window.Analyzer = (function () {
       if (mono > top) { top = mono; topI = i; }
       wsum += mono * i;
       if (i < 6) low += mono; else if (i < 26) midE += mono; else high += mono;
+      if (!silent) tone[i] += (mono - tone[i]) * toneK;
     }
 
     var tot = sumL + sumR;
     var s = 1 - Math.exp(-dt * 6);
     m.l = clamp01(sumL / N * 2.4);
     m.r = clamp01(sumR / N * 2.4);
+    // The meters are clamped at full scale: reaching it is as loud as this display can show.
+    if (sumL / N * 2.4 >= 0.99) overL = now;
+    if (sumR / N * 2.4 >= 0.99) overR = now;
     if (m.l >= m.lp) { m.lp = m.l; m.lpAt = now; } else if (now - m.lpAt > 900) m.lp = Math.max(m.l, m.lp - dt * 0.5);
     if (m.r >= m.rp) { m.rp = m.r; m.rpAt = now; } else if (now - m.rpAt > 900) m.rp = Math.max(m.r, m.rp - dt * 0.5);
     m.bal += ((tot > 0.05 ? (sumR - sumL) / tot : 0) - m.bal) * s;
@@ -318,14 +397,20 @@ window.Analyzer = (function () {
     el.wid.style.transform = 'scaleX(' + m.wid.toFixed(3) + ')';
 
     beat = Math.max(0, beat - dt * 5);
-    el.beat.style.opacity = (0.15 + 0.85 * beat).toFixed(2);
+    var bi, active = -1, glow = beat;
+    if (bpmShown && beatT0 && !silent) {
+      var bph = (now - beatT0) / (60000 / bpmShown), bk = Math.floor(bph + 0.06);
+      var first = 0;
+      for (bi = 1; bi < 4; bi++) if (barAcc[bi] > barAcc[first]) first = bi;
+      active = (((bk - first) % 4) + 4) % 4;
+      glow = Math.max(0, 1 - (bph + 0.06 - bk) * 2.4);
+    } else if (beat > 0) active = 0;       // no tempo yet: just flash on each onset
+    for (bi = 0; bi < 4; bi++) el.beats[bi].style.opacity = (bi === active ? 0.25 + 0.75 * glow : 0.15).toFixed(2);
 
     if (now - textAt > 150) {
       textAt = now;
-      el.low.textContent = Math.round(m.low * 100);
-      el.mid.textContent = Math.round(m.mid * 100);
-      el.high.textContent = Math.round(m.high * 100);
-      el.bright.textContent = Math.round(m.bright * 100);
+      el.lo.classList.toggle('on', now - overL < 1200);
+      el.ro.classList.toggle('on', now - overR < 1200);
       el.dr.textContent = m.dr > 0 ? m.dr.toFixed(1) : '--';
       el.sim.textContent = tot > 0.05 ? Math.round(m.sim * 100) : '--';
       el.peak.textContent = m.peakBand >= 0 ? 'B' + (m.peakBand + 1) : '--';
@@ -333,18 +418,25 @@ window.Analyzer = (function () {
       // A gap in the audio makes the stored envelope useless, so drop it, but keep the
       // tempo on screen: it is still right for this track. Clear it only after real silence.
       if (silent && now - lastAt > 3000) envN = 0;
-      if (silent && now - lastAt > 20000) { bpmHist.length = 0; bpmShown = 0; }
+      if (silent && now - lastAt > 20000) { bpmHist.length = 0; bpmShown = 0; bpmConf = 0; beatT0 = 0; }
       el.bpm.textContent = bpmShown ? Math.round(bpmShown) : '--';
+      // An unsure estimate is shown dimmer instead of jumping around at full strength.
+      el.bpm.style.opacity = bpmShown ? (0.45 + 0.55 * bpmConf).toFixed(2) : '1';
+      el.conf.style.transform = 'scaleX(' + (bpmShown ? bpmConf : 0).toFixed(2) + ')';
     }
 
     size(now);
     drawSpectrum();
     drawLoudness();
+    if (now - toneAt > 120) { toneAt = now; drawTone(); }
   }
 
   function setColors(f, a) { fg = f.map(Math.round); accent = a.map(Math.round); }
   function setEnabled(on) { enabled = !!on; sizeAt = -1e9; }
-  function resetTempo() { bpmHist.length = 0; bpmShown = 0; envN = 0; }
+  function resetTempo() {
+    bpmHist.length = 0; bpmShown = 0; bpmConf = 0; envN = 0; beatT0 = 0;
+    for (var i = 0; i < N; i++) tone[i] = 0;      // a new track gets its own tonal balance
+  }
 
   return { onAudio: onAudio, frame: frame, setColors: setColors, setEnabled: setEnabled, resetTempo: resetTempo };
 })();

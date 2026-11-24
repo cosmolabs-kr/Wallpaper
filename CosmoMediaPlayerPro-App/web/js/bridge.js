@@ -50,6 +50,8 @@
     if (m.t === 'log') { window.__cosmoLog = (window.__cosmoLog || []).concat(m.m); console.warn(m.m); return; }
     if (m.t === 'controls') { controls = m; applyControls(); return; }
     if (m.t === 'device') { device = m; applyDevice(); return; }
+    if (m.t === 'version') { window.__cosmoVersion = m.v; if (window.cosmoCheckUpdate) window.cosmoCheckUpdate(); return; }
+    if (m.t === 'bgimage') { if (window.cosmoBackgroundPicked) window.cosmoBackgroundPicked(m.url); return; }
     last[m.t] = m;
     if (listeners[m.t]) { try { listeners[m.t](m); } catch (e) { console.error(e); } }
   });

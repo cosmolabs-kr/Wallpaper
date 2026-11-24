@@ -8,6 +8,7 @@
 </head>
 <body>
   <canvas id="bg"></canvas>
+  <div id="bgImage"></div>
   <canvas id="dust"></canvas>
 
   <div id="stage">
@@ -28,6 +29,8 @@
           <div class="cover-empty">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17.5V6.2l10-2v11.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.5" cy="17.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="16.5" cy="15.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
           </div>
+          <div class="cover-fill" id="coverFillA"></div>
+          <div class="cover-fill" id="coverFillB"></div>
           <img class="cover-img" id="coverA" alt="">
           <img class="cover-img" id="coverB" alt="">
           <div class="cover-gloss"></div>
@@ -74,19 +77,19 @@
           <div class="an-side">
             <div class="an-tempo">
               <span class="an-label">Tempo</span>
-              <div class="an-bpm"><i id="anBeat"></i><b id="anBpm">--</b><span>BPM</span></div>
+              <div class="an-bpm"><span class="an-beats" id="anBeats"><i></i><i></i><i></i><i></i></span><b id="anBpm">--</b><span>BPM</span><div class="an-conf"><div id="anConf"></div></div></div>
             </div>
             <div class="an-meters">
-              <div class="an-row"><span>L</span><div class="an-meter"><div id="anL"></div><i id="anLp"></i></div></div>
-              <div class="an-row"><span>R</span><div class="an-meter"><div id="anR"></div><i id="anRp"></i></div></div>
+              <div class="an-row"><span>L</span><div class="an-meter"><div id="anL"></div><i id="anLp"></i></div><em class="an-over" id="anLo"></em></div>
+              <div class="an-row"><span>R</span><div class="an-meter"><div id="anR"></div><i id="anRp"></i></div><em class="an-over" id="anRo"></em></div>
               <div class="an-row"><span>Bal</span><div class="an-meter an-bal"><i id="anBal"></i></div></div>
               <div class="an-row"><span>Wid</span><div class="an-meter"><div id="anWid"></div></div></div>
             </div>
             <div class="an-stats">
-              <div><b id="anLow">0</b><span>Low</span></div>
-              <div><b id="anMid">0</b><span>Mid</span></div>
-              <div><b id="anHigh">0</b><span>High</span></div>
-              <div><b id="anBright">0</b><span>Bright</span></div>
+              <div class="an-tone">
+                <canvas id="anTone"></canvas>
+                <div class="an-tone-cap"><span>Tonal balance</span><span id="anTilt">--</span></div>
+              </div>
               <div><b id="anDr">--</b><span>DR dB</span></div>
               <div><b id="anSim">--</b><span>L/R sim</span></div>
               <div><b id="anPeak">--</b><span>Peak</span></div>

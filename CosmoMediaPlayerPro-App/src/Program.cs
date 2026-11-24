@@ -349,12 +349,30 @@ namespace CosmoPlayer
             // The UI is plain local files served under a private host name, so relative
             // paths and fetch() (lyrics) behave exactly as on a web server.
             core.SetVirtualHostNameToFolderMapping("cosmo.app", webDir, CoreWebView2HostResourceAccessKind.Allow);
+            // The user's own background picture is copied here and served under its own host name
+            // (a page cannot load file:// paths).
+            Directory.CreateDirectory(UserDir);
+            core.SetVirtualHostNameToFolderMapping("cosmo.user", UserDir, CoreWebView2HostResourceAccessKind.Allow);
             await core.AddScriptToExecuteOnDocumentCreatedAsync(File.ReadAllText(Path.Combine(webDir, "js", "bridge.js")));
             core.WebMessageReceived += (s, e) =>
             {
                 string cmd;
                 try { cmd = e.TryGetWebMessageAsString(); } catch { return; }
-                if (cmd == "ready") { media?.Resync(); audio?.SendDevice(); return; }
+                if (cmd == "ready")
+                {
+                    media?.Resync(); audio?.SendDevice();
+                    Post("{\"t\":\"version\",\"v\":" + Json.Str(Application.ProductVersion) + "}");
+                    return;
+                }
+                // "Update available" button. Only ever this one fixed address.
+                if (cmd == "openrelease")
+                {
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://github.com/cosmolabs-kr/Wallpaper/releases/latest") { UseShellExecute = true }); }
+                    catch (Exception ex) { Log.Write("open release page: " + ex.Message); }
+                    return;
+                }
+                // Not inside this event handler: a modal dialog here would re-enter WebView2.
+                if (cmd == "pickimage") { BeginInvoke((Action)PickBackground); return; }
                 if (cmd != null && cmd.StartsWith("hit:")) { controlRects = cmd.Substring(4); desktopInput?.SetControls(controlRects); return; }
                 media?.Command(cmd);
             };
@@ -364,6 +382,39 @@ namespace CosmoPlayer
             media.Start();
             audio = new AudioBridge(Post);
             audio.Start();
+        }
+
+        private static string UserDir => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CosmoPlayer", "user");
+
+        /// <summary>
+        /// "Background image" in the settings panel: shows the Windows file picker, keeps a copy
+        /// of the chosen picture, and tells the page its address.
+        /// </summary>
+        private void PickBackground()
+        {
+            try
+            {
+                string picked = null;
+                // The wallpaper has no window of its own on top of the desktop: give the
+                // dialog an invisible always-on-top owner so it does not open behind things.
+                using (var owner = new Form { TopMost = true, ShowInTaskbar = false, Opacity = 0, FormBorderStyle = FormBorderStyle.None, StartPosition = FormStartPosition.CenterScreen, Size = new Size(1, 1) })
+                using (var dlg = new OpenFileDialog { Title = "Cosmo Media Player Pro", Filter = "Images|*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif", CheckFileExists = true })
+                {
+                    owner.Show();
+                    if (dlg.ShowDialog(owner) == DialogResult.OK) picked = dlg.FileName;
+                    owner.Close();
+                }
+                if (picked == null) return;
+
+                Directory.CreateDirectory(UserDir);
+                foreach (string old in Directory.GetFiles(UserDir, "background-*")) { try { File.Delete(old); } catch { } }
+                // A new name every time, so the page never shows a cached older picture.
+                string name = "background-" + DateTime.UtcNow.Ticks + Path.GetExtension(picked).ToLowerInvariant();
+                File.Copy(picked, Path.Combine(UserDir, name), true);
+                Post("{\"t\":\"bgimage\",\"url\":" + Json.Str("https://cosmo.user/" + name) + "}");
+            }
+            catch (Exception ex) { Log.Write("background image: " + ex.Message); }
         }
 
         /// <summary>Sends one JSON message to the page (safe to call from any thread).</summary>

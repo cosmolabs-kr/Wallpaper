@@ -30,7 +30,7 @@
   var T = STRINGS[resolveLang('auto')];
 
   var settings = {
-    mood: 'auto', intensity: 1, speed: 1, react: 1, mouse: true,
+    mood: 'auto', intensity: 1, speed: 1, react: 1, mouse: false,
     particles: true, clock24: true, fps: 0, autogain: true
   };
 
@@ -40,11 +40,14 @@
 
   function applyMood(p) {
     var bg = p.bg, acc = p.accents;
-    if (settings.mood === 'light') {
+    var mood = settings.mood;
+    // Nothing playing: there is no album to take colors from, so the user picks light or dark.
+    if (mood === 'auto' && p === P.DEFAULT && settings.idleDark) mood = 'dark';
+    if (mood === 'light') {
       bg = P.mix(bg, [255, 255, 255], 0.8);
       if (P.lum(bg) < 0.86) bg = P.mix(bg, [255, 255, 255], 0.5);
       acc = acc.map(function (a) { return P.lum(a) > 0.8 ? P.shade(a, -0.3) : a; });
-    } else if (settings.mood === 'dark') {
+    } else if (mood === 'dark') {
       var l = Math.max(P.lum(bg), 0.02);
       var k = Math.min(1, 0.075 / l);
       bg = P.mix([bg[0] * k, bg[1] * k, bg[2] * k], [10, 11, 14], 0.35);
@@ -92,6 +95,7 @@
     player.classList.toggle('has-track', has);
     player.classList.toggle('is-idle', !has);
     player.classList.toggle('is-playing', has && media.playing);
+    player.classList.toggle('is-paused', has && !media.playing);
     statusEl.textContent = !has ? T.idle : (media.playing ? T.playing : T.paused);
   }
 
@@ -163,6 +167,8 @@
     if (!src) {
       if (coverFront) coverFront.classList.remove('show');
       coverFront = null;
+      $('coverFillA').classList.remove('show');
+      $('coverFillB').classList.remove('show');
       player.classList.remove('has-art');
       $('vinylLabel').style.backgroundImage = '';
       rawPalette = P.DEFAULT;
@@ -174,6 +180,14 @@
     img.onload = function () {
       if (media.thumb !== src) return; // superseded by a newer cover
       var next = coverFront === coverA ? coverB : coverA;
+      var fill = $(next === coverA ? 'coverFillA' : 'coverFillB');
+      var otherFill = $(next === coverA ? 'coverFillB' : 'coverFillA');
+      var ratio = img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1;
+      var whole = ratio > 1.15 || ratio < 0.87;      // not (nearly) square: show all of it
+      next.classList.toggle('fit', whole);
+      fill.style.backgroundImage = whole ? 'url("' + src + '")' : '';
+      fill.classList.toggle('show', whole);
+      otherFill.classList.remove('show');
       next.src = src;
       next.classList.add('show');
       if (coverFront) coverFront.classList.remove('show');
@@ -424,6 +438,24 @@
   function num(p, fallback) { var n = Number(p.value); return isFinite(n) ? n : fallback; }
   function bool(p) { return p.value === true || p.value === 'true' || p.value === 1; }
 
+  /* The user's own picture as the background: a file path (web edition, from Wallpaper
+     Engine) or a URL (app edition, from the host program); empty when cleared.
+     The silk shader stops while a picture is shown. */
+  function setBackgroundImage(value) {
+    var el = $('bgImage');
+    var path = value ? String(value) : '';
+    if (!path) { settings.bgImage = false; body.classList.remove('has-bgimage'); return; }
+    var url = /^(file|https?|data):/i.test(path) ? path : 'file:///' + path.split('\\').join('/');
+    var img = new Image();
+    img.onload = function () {
+      el.style.backgroundImage = 'url("' + url.replace(/"/g, '%22') + '")';
+      settings.bgImage = true;
+      body.classList.add('has-bgimage');
+    };
+    img.onerror = function () { settings.bgImage = false; body.classList.remove('has-bgimage'); };
+    img.src = url;
+  }
+
   window.wallpaperPropertyListener = {
     applyUserProperties: function (p) {
       if (p.language) window.cosmoSetLanguage(String(p.language.value));
@@ -441,12 +473,32 @@
       if (p.playerscale) root.style.setProperty('--scale', String(num(p.playerscale, 100) / 100));
       if (p.playerx) root.style.setProperty('--px', String(num(p.playerx, 50)));
       if (p.playery) root.style.setProperty('--py', String(num(p.playery, 50)));
+      if (p.idletheme) { settings.idleDark = String(p.idletheme.value) === 'dark'; applyPalette(false); }
+      if (p.bgimage) setBackgroundImage(p.bgimage.value);
+      if (p.bgdim) $('bgImage').style.setProperty('--dim', String(num(p.bgdim, 25) / 100));
+      if (p.bgblur) $('bgImage').style.setProperty('--blur', num(p.bgblur, 0) + 'px');
       if (p.glassblur) body.classList.toggle('no-blur', !bool(p.glassblur));
       if (p.showspectrum) body.classList.toggle('hide-spectrum', !bool(p.showspectrum));
       if (p.showtimeline) body.classList.toggle('hide-timeline', !bool(p.showtimeline));
-      if (p.hideidle) body.classList.toggle('hide-idle', bool(p.hideidle));
+      if (p.hideidle) settings.hideIdle = bool(p.hideidle);
+      if (p.hidepaused) settings.hidePaused = bool(p.hidepaused);
+      if (p.hideidle || p.hidepaused) {
+        body.classList.toggle('hide-idle', !!settings.hideIdle);
+        body.classList.toggle('hide-paused', !!settings.hideIdle && !!settings.hidePaused);
+      }
       if (p.showclock) body.classList.toggle('hide-clock', !bool(p.showclock));
       if (p.clock24h) { settings.clock24 = bool(p.clock24h); lastClock = ''; }
+      var clockEl = $('clock');
+      if (p.clockx) {
+        var cx = num(p.clockx, 100);
+        clockEl.style.setProperty('--cx', String(cx / 100));
+        clockEl.classList.toggle('align-left', cx < 34);
+        clockEl.classList.toggle('align-center', cx >= 34 && cx <= 66);
+      }
+      if (p.clocky) clockEl.style.setProperty('--cy', String(num(p.clocky, 100) / 100));
+      if (p.clocksize) clockEl.style.setProperty('--cs', String(num(p.clocksize, 100) / 100));
+      if (p.clockfont) clockEl.setAttribute('data-font', String(p.clockfont.value || 'default'));
+      if (p.clockglass) body.classList.toggle('clock-glass', bool(p.clockglass));
       if (p.analyzer) {
         var on = bool(p.analyzer);
         body.classList.toggle('hide-analyzer', !on);
@@ -484,7 +536,7 @@
 
     if (demo) demo.tick(now);
     updateAudio(dt, now);
-    if (hasGL) window.Flow.frame(dt, PREVIEW ? CALM : audio, settings);
+    if (hasGL && !settings.bgImage) window.Flow.frame(dt, PREVIEW ? CALM : audio, settings);
     drawDust(dt, now / 1000);
     if (now - sizeCheck > 500) { sizeSpectrum(); sizeCheck = now; }
     drawSpectrum();
