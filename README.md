@@ -4,7 +4,7 @@ Wallpapers for [Wallpaper Engine](https://store.steampowered.com/app/431960/Wall
 
 | Wallpaper | What it is | Get it |
 | --- | --- | --- |
-| [Cosmo Media Player Pro – App Edition](CosmoMediaPlayerPro-App) | Media player wallpaper with working play / pause / next / previous buttons, real audio capture, an in-wallpaper settings panel and an animated character background | [Latest release](https://github.com/cosmolabs-kr/Wallpaper/releases/latest) |
+| [Cosmo Media Player Pro – App Edition](CosmoMediaPlayerPro-App) | Media player wallpaper with working play / pause / next / previous buttons, real audio capture, an in-wallpaper settings panel and an animated character | [Latest release](https://github.com/cosmolabs-kr/Wallpaper/releases/latest) |
 
 ![Cosmo Media Player Pro](CosmoMediaPlayerPro-App/preview.gif)
 
@@ -13,7 +13,7 @@ The web edition of Cosmo Media Player Pro (no media buttons, installs with one c
 
 ## Changes
 
-- **App Edition 1.2.0** – Silk + Character background (wind, nod to the beat, blink, beat light, headphone equalizer), online track info panel and HD covers (iTunes / Deezer), analyzer layouts, spectrum styles, compact player; settings panel opens on the right
+- **App Edition 1.2.0** – animated character (wind, nod to the beat, blink, beat light, headphone equalizer) over the silk or your own background image, online track info panel and HD covers (iTunes / Deezer), analyzer layouts, spectrum styles, compact player; settings panel opens on the right
 - **App Edition 1.1.1** – follows Wallpaper Engine's pause rules (stops drawing while paused)
 - **App Edition 1.1.0** – background image, clock options, new analyzer readouts, update notice
 - **App Edition 1.0.0** – first release

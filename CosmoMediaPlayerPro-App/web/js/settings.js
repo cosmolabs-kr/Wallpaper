@@ -24,13 +24,12 @@
 
   // type: b = on/off, s = slider [min, max, step], c = choice [[value, en, ko], ...]
   var SCHEMA = [
-    { k: 'bgmode', en: 'Background ✨', ko: '배경 선택 ✨', zh: '选择背景 ✨', t: 'c', d: 'silk',
-      o: [['silk', 'Silk (album colors)', '실크 (앨범 색)', '丝绸（专辑颜色）'], ['character', 'Silk (album colors) + Character', '실크 (앨범 색) + 캐릭터', '丝绸（专辑颜色） + 角色']] },
-    { k: 'charwind', en: 'Wind on hair and veil (%) — 0 = still', ko: '머리카락·베일 바람 세기 (%) — 0 = 정지', zh: '头发和头纱的风力 (%) — 0 = 静止', t: 's', d: 40, r: [0, 200, 5], u: '%', need: 'bgmode=character' },
-    { k: 'charnod', en: 'Nod to the beat (%) — 0 = off', ko: '비트에 맞춰 끄덕임 (%) — 0 = 끔', zh: '随节拍点头 (%) — 0 = 关闭', t: 's', d: 100, r: [0, 200, 5], u: '%', need: 'bgmode=character' },
-    { k: 'charblink', en: 'Blinking', ko: '눈 깜빡임', zh: '眨眼', t: 'b', d: true, need: 'bgmode=character' },
-    { k: 'charlight', en: 'Beat light strength (%) — 0 = off', ko: '비트 조명(빛 반사) 세기 (%) — 0 = 끔', zh: '节拍光效强度 (%) — 0 = 关闭', t: 's', d: 125, r: [0, 200, 5], u: '%', need: 'bgmode=character' },
-    { k: 'chareq', en: 'Headphone equalizer', ko: '헤드폰 이퀄라이저', zh: '耳机均衡器', t: 'b', d: true, need: 'bgmode=character' },
+    { k: 'character', en: 'Show character ✨', ko: '캐릭터 표시 ✨', zh: '显示角色 ✨', t: 'b', d: false },
+    { k: 'charwind', en: 'Wind on hair and veil (%) — 0 = still', ko: '머리카락·베일 바람 세기 (%) — 0 = 정지', zh: '头发和头纱的风力 (%) — 0 = 静止', t: 's', d: 40, r: [0, 200, 5], u: '%', need: 'character' },
+    { k: 'charnod', en: 'Nod to the beat (%) — 0 = off', ko: '비트에 맞춰 끄덕임 (%) — 0 = 끔', zh: '随节拍点头 (%) — 0 = 关闭', t: 's', d: 100, r: [0, 200, 5], u: '%', need: 'character' },
+    { k: 'charblink', en: 'Blinking', ko: '눈 깜빡임', zh: '眨眼', t: 'b', d: true, need: 'character' },
+    { k: 'charlight', en: 'Beat light strength (%) — 0 = off', ko: '비트 조명(빛 반사) 세기 (%) — 0 = 끔', zh: '节拍光效强度 (%) — 0 = 关闭', t: 's', d: 125, r: [0, 200, 5], u: '%', need: 'character' },
+    { k: 'chareq', en: 'Headphone equalizer', ko: '헤드폰 이퀄라이저', zh: '耳机均衡器', t: 'b', d: true, need: 'character' },
     { k: 'language', en: 'Language', ko: '언어', zh: '语言', t: 'c', d: 'auto',
       o: [['auto', 'Auto', '자동', '自动'], ['en', 'English', 'English', 'English'], ['ko', '한국어', '한국어', '한국어'], ['zh', '中文', '中文', '中文']] },
     { k: 'colormood', en: 'Color mood', ko: '색 분위기', zh: '色彩氛围', t: 'c', d: 'auto',

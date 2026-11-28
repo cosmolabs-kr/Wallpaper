@@ -897,17 +897,7 @@ body.info-open .info-btn.ready span { color: rgb(var(--glass)); }
 body.compact .info-btn { top: calc(1 * var(--u)); right: calc(1.1 * var(--u)); }
 .player.is-idle .info-btn { opacity: 0; }
 
-/* ───────── Character background (prototype) ───────── */
-#charBg { position: fixed; inset: 0; width: 100%; height: 100%; display: none; }
-body.bg-character #charBg { display: block; }
 
-body.bg-character.has-bgimage #charBg { display: none; }
-
-/* ───────── Character background (prototype) ───────── */
-#charBg { position: fixed; inset: 0; width: 100%; height: 100%; display: none; }
-body.bg-character #charBg { display: block; }
-
-body.bg-character.has-bgimage #charBg { display: none; }
 /* The info panel gets the card's cover glow under its glass, so the two read as a set. */
 .player.has-art ~ .infopanel .ambient { opacity: .42; }
 /* Hover (set from script): the button lifts, brightens and gets a ring, so it reads as
@@ -932,3 +922,8 @@ body.hide-paused.media-paused #lyrics.on { opacity: 0; }
 .controls .gear.has-update { opacity: 1; position: relative; }
 .controls .gear.has-update::after { content: ""; position: absolute; right: 12%; top: 12%; width: 22%; height: 22%; border-radius: 50%; background: #ff4d3d; }
 .st-update { background: rgb(var(--accent)); color: rgb(var(--glass)); }
+
+/* ───────── Character ───────── */
+/* In front of the silk or of the user's own background picture, behind everything else. */
+#charBg { position: fixed; inset: 0; width: 100%; height: 100%; display: none; }
+body.bg-character #charBg { display: block; }

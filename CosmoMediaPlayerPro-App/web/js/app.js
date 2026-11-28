@@ -676,8 +676,9 @@
         window.TrackInfo.setTrack(settings.trackInfo ? media.title : '', media.artist);
       }
       if (p.hdcover) { settings.hdCover = bool(p.hdcover); maybeHd(); }
-      if (p.bgmode) {
-        settings.bgMode = String(p.bgmode.value || 'silk');
+      // 'character' (on/off) is the option; 'bgmode' is its older form (a choice of backgrounds).
+      if (p.character || p.bgmode) {
+        settings.bgMode = (p.character ? bool(p.character) : String(p.bgmode.value) === 'character') ? 'character' : 'silk';
         body.classList.toggle('bg-character', settings.bgMode === 'character');
         applyPalette(false);
       }
@@ -746,7 +747,7 @@
 
     if (demo) demo.tick(now);
     updateAudio(dt, now);
-    var charMode = settings.bgMode === 'character' && hasChar && !settings.bgImage;
+    var charMode = settings.bgMode === 'character' && hasChar;     // over the silk or over the user's picture
     // In character mode the silk still runs: it is the backdrop the picture fades into.
     if (hasGL && !settings.bgImage) window.Flow.frame(dt, PREVIEW ? CALM : audio, settings);
     if (charMode) window.Character.frame(dt, audio, window.Analyzer.getBeat(now), { flow: settings.intensity, speed: settings.speed, bands: level });
