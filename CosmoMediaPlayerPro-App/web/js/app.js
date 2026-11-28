@@ -17,9 +17,21 @@
   var TOGGLE = PREVIEW && /[?&]preview=3/.test(location.search);  // close-up; analyzer opens and closes
   var KEEP = PREVIEW && /[?&]preview=4/.test(location.search);    // app edition close-up: media buttons, analyzer stays
   var STRINGS = {
-    en: { playing: 'Now playing', paused: 'Paused', idle: 'Idle', nothing: 'Nothing playing' },
-    ko: { playing: '재생 중', paused: '일시정지', idle: '대기 중', nothing: '재생 중인 음악이 없습니다' },
-    zh: { playing: '正在播放', paused: '已暂停', idle: '空闲', nothing: '当前没有播放音乐' }
+    en: { playing: 'Now playing', paused: 'Paused', idle: 'Idle', nothing: 'Nothing playing',
+          info: 'Track info', date: 'Released', genre: 'Genre', track: 'Track', type: 'Type', label: 'Label',
+          feat: 'Featuring', isrc: 'ISRC', bpm: 'Ref. tempo', gain: 'ReplayGain',
+          loading: 'Looking up…', notfound: 'Not found in the music catalogs', off: 'Online track info is off',
+          types: { album: 'Album', single: 'Single', ep: 'EP', compile: 'Compilation' } },
+    ko: { playing: '재생 중', paused: '일시정지', idle: '대기 중', nothing: '재생 중인 음악이 없습니다',
+          info: '곡 정보', date: '발매일', genre: '장르', track: '트랙', type: '형태', label: '레이블',
+          feat: '참여', isrc: 'ISRC', bpm: '기준 템포', gain: '리플레이게인',
+          loading: '찾는 중…', notfound: '음악 카탈로그에서 찾지 못했습니다', off: '온라인 곡 정보가 꺼져 있습니다',
+          types: { album: '앨범', single: '싱글', ep: 'EP', compile: '컴필레이션' } },
+    zh: { playing: '正在播放', paused: '已暂停', idle: '空闲', nothing: '当前没有播放音乐',
+          info: '曲目信息', date: '发行日期', genre: '流派', track: '曲目', type: '类型', label: '厂牌',
+          feat: '参与', isrc: 'ISRC', bpm: '参考节拍', gain: '回放增益',
+          loading: '查找中…', notfound: '未在音乐曲库中找到', off: '在线曲目信息已关闭',
+          types: { album: '专辑', single: '单曲', ep: 'EP', compile: '合辑' } }
   };
   /* 'auto' follows the Windows display language; anything not listed falls back to English. */
   function resolveLang(l) {
@@ -31,7 +43,8 @@
 
   var settings = {
     mood: 'auto', intensity: 1, speed: 1, react: 1, mouse: false,
-    particles: true, clock24: true, fps: 0, autogain: true
+    particles: true, clock24: true, fps: 0, autogain: true, idleDark: true,
+    trackInfo: true, hdCover: true
   };
 
   /* ───────── Palette / theme ───────── */
@@ -43,6 +56,8 @@
     var mood = settings.mood;
     // Nothing playing: there is no album to take colors from, so the user picks light or dark.
     if (mood === 'auto' && p === P.DEFAULT && settings.idleDark) mood = 'dark';
+    // The character picture is dark: light glass would sit on it like a gray slab.
+    if (mood === 'auto' && settings.bgMode === 'character') mood = 'dark';
     if (mood === 'light') {
       bg = P.mix(bg, [255, 255, 255], 0.8);
       if (P.lum(bg) < 0.86) bg = P.mix(bg, [255, 255, 255], 0.5);
@@ -73,6 +88,8 @@
       if ((light ? l < 0.55 : l > 0.42) && c > bestC) { best = a; bestC = c; }
     });
     root.style.setProperty('--fg', rgbStr(fg));
+    // A fixed accent chosen by the user replaces the one taken from the album.
+    if (settings.accent) best = settings.accent;
     root.style.setProperty('--accent', rgbStr(best || fg));
     root.style.setProperty('--glass', light ? '255, 255, 255' : '16, 17, 21');
     root.style.setProperty('--glass-a', light ? '.46' : '.42');
@@ -80,6 +97,8 @@
     body.style.backgroundColor = 'rgb(' + rgbStr(p.bg) + ')';
     $('lyrics').style.setProperty('--halo', light ? '255, 255, 255' : '0, 0, 0');
     window.Analyzer.setColors(fg, best || fg);
+    window.Character.setAccent(best || fg);
+    window.Character.setBackdrop(p.bg);
     dustTint = light ? P.mix(p.bg, [255, 255, 255], 0.85) : [255, 255, 255];
   }
 
@@ -96,6 +115,9 @@
     player.classList.toggle('is-idle', !has);
     player.classList.toggle('is-playing', has && media.playing);
     player.classList.toggle('is-paused', has && !media.playing);
+    // Mirrored on <body> for things outside the player (lyrics) that follow the hide options.
+    body.classList.toggle('media-idle', !has);
+    body.classList.toggle('media-paused', has && !media.playing);
     statusEl.textContent = !has ? T.idle : (media.playing ? T.playing : T.paused);
   }
 
@@ -105,7 +127,7 @@
     swapTimer = setTimeout(function () {
       titleEl.textContent = media.title || T.nothing;
       artistEl.textContent = media.title ? media.artist : '';
-      albumEl.textContent = media.title ? media.album : '';
+      renderAlbum();
       fitTitle();
       metaEl.classList.remove('swap');
     }, 340);
@@ -116,7 +138,7 @@
   var INFO_MIN = 16.2, INFO_MAX = 27;
   var measureEl = $('titleMeasure');
   function fitTitle() {
-    var uPx = player.offsetHeight / 14;
+    var uPx = player.offsetHeight / (body.classList.contains('compact') ? 10 : 14);
     if (!uPx) return;
     var w = 0;
     if (media.title) {
@@ -148,10 +170,16 @@
     var changed = title !== media.title || artist !== media.artist || album !== media.album;
     if (title !== media.title) {
       media.pos = 0; media.dur = 0; media.stamp = performance.now();
+      // Some players do not send the new cover with the new title. If none has come
+      // 3 s later, the catalog cover (when found) stands in for it.
+      media.titleAt = performance.now();
+      media.hdShown = false;
+      setTimeout(maybeHd, 3100);
       if (!PREVIEW) window.Analyzer.resetTempo();
     }
     media.title = title; media.artist = artist; media.album = album;
     window.Lyrics.setTrack(title, artist);
+    if (changed && !PREVIEW) window.TrackInfo.setTrack(title, artist);
     if (changed) renderMeta();
     renderStatus();
     if (!title) setThumbnail('');
@@ -176,9 +204,33 @@
       return;
     }
 
+    media.lowres = false;
+    media.hdShown = false;
+    media.thumbAt = performance.now();
+    showCover(src, src, false);
+  }
+
+  /* A small or non-square cover (video thumbnails) is replaced by the catalog's 1000x1000
+     cover when the catalog lookup found the same track. */
+  function maybeHd() {
+    var info = media.info;
+    var stale = media.titleAt && (media.thumbAt || 0) < media.titleAt && performance.now() - media.titleAt > 3000;
+    if (!settings.hdCover || !info || !info.cover || !(media.lowres || stale) || media.hdShown || !media.thumb) return;
+    media.hdShown = true;
+    showCover(info.cover, media.thumb, true, info);
+  }
+
+  function showCover(src, token, isHd, info) {
     var img = new Image();
+    if (/^https?:/i.test(src)) img.crossOrigin = 'anonymous'; // keeps the canvas readable for the palette
     img.onload = function () {
-      if (media.thumb !== src) return; // superseded by a newer cover
+      if (media.thumb !== token) return; // superseded by a newer cover
+      if (isHd && media.info !== info) return;
+      if (!isHd) {
+        var short = Math.min(img.naturalWidth, img.naturalHeight);
+        var r0 = img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1;
+        media.lowres = short < 500 || r0 > 1.15 || r0 < 0.87;
+      }
       var next = coverFront === coverA ? coverB : coverA;
       var fill = $(next === coverA ? 'coverFillA' : 'coverFillB');
       var otherFill = $(next === coverA ? 'coverFillB' : 'coverFillA');
@@ -194,14 +246,95 @@
       coverFront = next;
       var css = 'url("' + src + '")';
       $('ambient').style.backgroundImage = css;
+      $('ipAmbient').style.backgroundImage = css;   // the info panel wears the same cover glow
       $('vinylLabel').style.backgroundImage = css;
       player.classList.add('has-art');
       rawPalette = P.extract(img);
       applyPalette(false);
+      if (!isHd) maybeHd();
     };
-    img.onerror = function () { if (media.thumb === src) { media.thumb = ''; } };
+    img.onerror = function () { if (!isHd && media.thumb === token) { media.thumb = ''; } };
     img.src = src;
   }
+
+  function renderAlbum() { albumEl.textContent = media.title ? media.album : ''; }
+
+  /* Track info panel: one row per value the catalogs returned. */
+  var ipList = $('ipList'), ipNote = $('ipNote');
+  function renderInfoPanel() {
+    var i = media.info || {}, rows = [];
+    function row(label, value) { if (value !== undefined && value !== null && value !== '') rows.push([label, value]); }
+    row(T.date, i.date);
+    row(T.genre, i.genre);
+    row(T.track, i.track ? i.track + ' / ' + i.tracks : '');
+    row(T.type, i.type ? (T.types[i.type] || i.type) : '');
+    row(T.label, i.label);
+    row(T.feat, i.feat);
+    row(T.isrc, i.isrc);
+    row(T.bpm, i.bpm ? Math.round(i.bpm) + ' BPM' : '');
+    row(T.gain, typeof i.gain === 'number' ? (i.gain > 0 ? '+' : '') + i.gain.toFixed(1) + ' dB' : '');
+    ipList.textContent = '';
+    rows.forEach(function (rw) {
+      var dt = document.createElement('dt'), dd = document.createElement('dd');
+      dt.textContent = rw[0];
+      dd.textContent = dd.title = rw[1];
+      ipList.appendChild(dt);
+      ipList.appendChild(dd);
+    });
+    var st = media.infoState;
+    ipNote.textContent = rows.length ? '' : st === 'loading' ? T.loading : st === 'off' ? T.off : st === 'done' ? T.notfound : '';
+    $('ipTitle').textContent = T.info;
+    $('ipExplicit').classList.toggle('on', !!i.explicit);
+    // Card corner: a spinner while the catalogs are asked, then an "i" once there is
+    // something to show (nothing when the track was not found).
+    var btn = $('infoBtn');
+    btn.classList.toggle('loading', st === 'loading');
+    btn.classList.toggle('ready', rows.length > 0);
+  }
+
+  function onTrackInfo(info, state) {
+    media.info = info;
+    media.infoState = state;
+    renderInfoPanel();
+    window.Analyzer.setReference(info && info.bpm, info && info.gain);
+    if (info) maybeHd();
+  }
+
+  /* Clicking the card opens or closes the info panel. The stage ignores the pointer
+     (clicks have to reach the desktop), so the hit test is done by position. */
+  function inPlayer(e) {
+    var b = player.getBoundingClientRect();
+    return e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom;
+  }
+  /* The panel opens on whichever side of the card has room for it (right first). */
+  /* The "i" button, with a little extra room around it so it is easy to hit. It counts only
+     while it is showing (there is something to open). */
+  var infoBtn = $('infoBtn');
+  function overInfoBtn(e) {
+    if (!infoBtn.classList.contains('ready')) return false;
+    var b = infoBtn.getBoundingClientRect(), pad = b.width * 0.45;
+    return e.clientX >= b.left - pad && e.clientX <= b.right + pad && e.clientY >= b.top - pad && e.clientY <= b.bottom + pad;
+  }
+  // The stage ignores the pointer, so :hover never fires: the hover look is set from here.
+  window.addEventListener('mousemove', function (e) {
+    var over = !PREVIEW && !!media.title && overInfoBtn(e);
+    if (over !== infoBtn.classList.contains('hover')) infoBtn.classList.toggle('hover', over);
+  });
+  document.addEventListener('mouseleave', function () { infoBtn.classList.remove('hover'); });
+
+  var rigEl = $('rig'), infoEl = $('infoPanel');
+  function placeInfo() {
+    var b = player.getBoundingClientRect(), w = infoEl.offsetWidth, gap = b.height * 1.7 / 14;
+    var left = b.right + gap + w > window.innerWidth && b.left - gap - w >= 0;
+    if (left !== rigEl.classList.contains('info-left')) rigEl.classList.toggle('info-left', left);
+  }
+
+  window.addEventListener('click', function (e) {
+    if (PREVIEW || !media.title) return;
+    // The panel opens from the "i" button only; once open, a click anywhere on the card closes it.
+    if (body.classList.contains('info-open')) { if (inPlayer(e)) body.classList.remove('info-open'); }
+    else if (overInfoBtn(e)) body.classList.add('info-open');
+  });
 
   function onThumbnail(e) { setThumbnail((e && e.thumbnail) || ''); }
 
@@ -322,6 +455,9 @@
     if (w && h && (w !== specW || h !== specH)) { spec.width = specW = w; spec.height = specH = h; }
   }
 
+  /* Styles: 'bars' (bottom-aligned), 'mirror' (centered bars), 'wave' (filled curve),
+     'dots' (a dot riding on each band). */
+  var specVals = new Float32Array(NBARS);
   function drawSpectrum() {
     if (!specW || !specH) return;
     sctx.clearRect(0, 0, specW, specH);
@@ -329,15 +465,50 @@
     var bw = Math.max(1, Math.round(slot * 0.5));
     var rad = bw / 2;
     var fg = getFg();
-    for (var j = 0; j < NBARS; j++) {
+    var style = settings.specStyle;
+    var j, v, h, x, y;
+    for (j = 0; j < NBARS; j++) {
       var pos = j / (NBARS - 1) * 54;
       var i0 = Math.floor(pos), fr = pos - i0;
-      var v = level[i0] * (1 - fr) + level[Math.min(BANDS - 1, i0 + 1)] * fr;
-      v = Math.pow(Math.min(1, v * (1 + j / NBARS * 1.6) * settings.react), 0.82);
-      var h = Math.max(bw, v * specH);
-      var x = Math.round(j * slot + (slot - bw) / 2), y = specH - h;
+      v = level[i0] * (1 - fr) + level[Math.min(BANDS - 1, i0 + 1)] * fr;
+      specVals[j] = Math.pow(Math.min(1, v * (1 + j / NBARS * 1.6) * settings.react), 0.82);
+    }
+    if (style === 'wave') {
+      var lw = Math.max(1, specH * 0.07), top = lw, usable = specH - lw * 1.5;
+      var px = function (k) { return k / (NBARS - 1) * specW; };
+      var py = function (k) { return top + (1 - specVals[k]) * usable; };
+      sctx.beginPath();
+      sctx.moveTo(0, py(0));
+      for (j = 1; j < NBARS; j++) {
+        var mx = (px(j - 1) + px(j)) / 2;
+        sctx.bezierCurveTo(mx, py(j - 1), mx, py(j), px(j), py(j));
+      }
+      sctx.lineWidth = lw;
+      sctx.lineJoin = 'round';
+      sctx.strokeStyle = 'rgba(' + fg + ',.85)';
+      sctx.stroke();
+      sctx.lineTo(specW, specH); sctx.lineTo(0, specH); sctx.closePath();
+      var g = sctx.createLinearGradient(0, 0, 0, specH);
+      g.addColorStop(0, 'rgba(' + fg + ',.32)');
+      g.addColorStop(1, 'rgba(' + fg + ',.04)');
+      sctx.fillStyle = g;
+      sctx.fill();
+      return;
+    }
+    for (j = 0; j < NBARS; j++) {
+      v = specVals[j];
+      x = Math.round(j * slot + (slot - bw) / 2);
       sctx.fillStyle = 'rgba(' + fg + ',' + (0.3 + 0.6 * v).toFixed(3) + ')';
       sctx.beginPath();
+      if (style === 'dots') {
+        var r = Math.max(1, bw * 0.62);
+        y = specH - r - v * (specH - r * 2);
+        sctx.arc(x + bw / 2, y, r, 0, 6.2832);
+        sctx.fill();
+        continue;
+      }
+      h = Math.max(bw, v * specH);
+      y = style === 'mirror' ? (specH - h) / 2 : specH - h;
       if (sctx.roundRect) sctx.roundRect(x, y, bw, h, rad); else sctx.rect(x, y, bw, h);
       sctx.fill();
     }
@@ -420,6 +591,7 @@
     lastClock = '';
     renderStatus();
     if (!media.title) titleEl.textContent = T.nothing;
+    renderInfoPanel();
   };
 
   function renderClock() {
@@ -479,6 +651,43 @@
       if (p.bgblur) $('bgImage').style.setProperty('--blur', num(p.bgblur, 0) + 'px');
       if (p.glassblur) body.classList.toggle('no-blur', !bool(p.glassblur));
       if (p.showspectrum) body.classList.toggle('hide-spectrum', !bool(p.showspectrum));
+      if (p.spectrumstyle) settings.specStyle = String(p.spectrumstyle.value || 'bars');
+      if (p.fixedaccent) settings.fixedAccent = bool(p.fixedaccent);
+      if (p.accentcolor) settings.accentRaw = String(p.accentcolor.value || '');
+      if (p.fixedaccent || p.accentcolor) {
+        // Wallpaper Engine colors are "r g b" with each part 0..1.
+        var ac = (settings.accentRaw || '').split(/\s+/).map(Number);
+        settings.accent = settings.fixedAccent && ac.length >= 3 && ac.every(isFinite)
+          ? ac.slice(0, 3).map(function (c) { return Math.max(0, Math.min(255, c * 255)); }) : null;
+        applyPalette(false);
+      }
+      if (p.playerstyle || p.showvinyl) {
+        if (p.playerstyle) settings.compact = String(p.playerstyle.value) === 'compact';
+        if (p.showvinyl) settings.vinyl = bool(p.showvinyl);
+        body.classList.toggle('compact', !!settings.compact);
+        body.classList.toggle('no-vinyl', !settings.compact && settings.vinyl === false);
+        specW = specH = 0;
+        fitTitle();
+      }
+      if (p.trackinfo) {
+        settings.trackInfo = bool(p.trackinfo);
+        window.TrackInfo.setEnabled(settings.trackInfo);
+        // Turning it on looks up the current track; off clears what is shown.
+        window.TrackInfo.setTrack(settings.trackInfo ? media.title : '', media.artist);
+      }
+      if (p.hdcover) { settings.hdCover = bool(p.hdcover); maybeHd(); }
+      if (p.bgmode) {
+        settings.bgMode = String(p.bgmode.value || 'silk');
+        body.classList.toggle('bg-character', settings.bgMode === 'character');
+        applyPalette(false);
+      }
+      if (p.charwind) window.Character.setOptions({ wind: (parseFloat(p.charwind.value) || 0) / 100 });
+      // Saved values from before this was a slider are true/false.
+      if (p.charlight) window.Character.setOptions({ light: typeof p.charlight.value === 'boolean' ? (p.charlight.value ? 1 : 0) : (parseFloat(p.charlight.value) || 0) / 100 });
+      if (p.charnod) window.Character.setOptions({ nod: (parseFloat(p.charnod.value) || 0) / 100 });
+      if (p.charblink) window.Character.setOptions({ blink: bool(p.charblink) });
+      if (p.chareq) window.Character.setOptions({ eq: bool(p.chareq) });
+      if (p.analyzerlayout) $('analyzer').setAttribute('data-layout', String(p.analyzerlayout.value || 'full'));
       if (p.showtimeline) body.classList.toggle('hide-timeline', !bool(p.showtimeline));
       if (p.hideidle) settings.hideIdle = bool(p.hideidle);
       if (p.hidepaused) settings.hidePaused = bool(p.hidepaused);
@@ -521,6 +730,7 @@
   /* ───────── Main loop ───────── */
   var hasGL = window.Flow.init($('bg'));
   if (!hasGL) $('bg').style.display = 'none';
+  var hasChar = window.Character.init($('charBg'));
 
   function onResize() { sizeDust(); specW = specH = 0; }
   window.addEventListener('resize', onResize);
@@ -536,9 +746,12 @@
 
     if (demo) demo.tick(now);
     updateAudio(dt, now);
+    var charMode = settings.bgMode === 'character' && hasChar && !settings.bgImage;
+    // In character mode the silk still runs: it is the backdrop the picture fades into.
     if (hasGL && !settings.bgImage) window.Flow.frame(dt, PREVIEW ? CALM : audio, settings);
+    if (charMode) window.Character.frame(dt, audio, window.Analyzer.getBeat(now), { flow: settings.intensity, speed: settings.speed, bands: level });
     drawDust(dt, now / 1000);
-    if (now - sizeCheck > 500) { sizeSpectrum(); sizeCheck = now; }
+    if (now - sizeCheck > 500) { sizeSpectrum(); placeInfo(); sizeCheck = now; }
     drawSpectrum();
     var pos = getPosition(now);
     window.Analyzer.frame(dt, now, pos, media.title ? media.dur : 0);
@@ -549,9 +762,18 @@
 
   /* ───────── Demo mode (plain browser, outside Wallpaper Engine) ───────── */
   var demo = null;
-  if (!IN_WE) demo = makeDemo();
+  // ?director : no built-in demo; a recording script drives everything through window.__cosmoDemo
+  // (used by tools/record-thumb.js to make the Workshop thumbnail).
+  if (!IN_WE) {
+    if (/[?&]director/.test(location.search)) {
+      window.__cosmoDemo = { properties: onProperties, thumbnail: onThumbnail, timeline: onTimeline, playback: onPlayback,
+        audio: onAudio, settings: settings };
+    } else demo = makeDemo();
+  }
 
   function makeDemo() {
+    // Outside Wallpaper Engine only: lets a test drive the media inputs directly.
+    window.__cosmoDemo = { properties: onProperties, thumbnail: onThumbnail, timeline: onTimeline, playback: onPlayback };
     var tracks = [
       { title: 'Paper Moon', artist: 'Demo Artist', album: 'White Room', dur: 214,
         cols: ['#f2f1ee', '#4f7fb5', '#15171c', '#eeb08a'],
@@ -651,7 +873,7 @@
         applyPalette(false);
       }
     });
-    if (!PREVIEW) window.addEventListener('click', next);
+    if (!PREVIEW) window.addEventListener('click', function (e) { if (!inPlayer(e)) next(); });
 
     var fake = new Float32Array(128);
     setTimeout(next, 50);
@@ -674,8 +896,11 @@
     };
   }
 
+  if (!IN_WE && /[?&]char/.test(location.search)) window.wallpaperPropertyListener.applyUserProperties({ bgmode: { value: 'character' } });
+
   /* ───────── Boot ───────── */
   window.Lyrics.init({ getDuration: function () { return media.dur; } });
+  window.TrackInfo.init({ onInfo: onTrackInfo, getDuration: function () { return media.dur; } });
   titleEl.textContent = T.nothing;
   renderStatus();
   applyPalette(true);

@@ -8,6 +8,7 @@
 </head>
 <body>
   <canvas id="bg"></canvas>
+  <canvas id="charBg"></canvas>
   <div id="bgImage"></div>
   <canvas id="dust"></canvas>
 
@@ -36,6 +37,8 @@
           <div class="cover-gloss"></div>
         </div>
 
+        <div class="info-btn" id="infoBtn"><span>i</span></div>
+
         <div class="info">
           <div class="status">
             <span class="pulse"><i></i><i></i><i></i></span>
@@ -62,37 +65,47 @@
         </div>
       </div>
 
+      <div id="infoPanel" class="infopanel">
+        <div class="ambient" id="ipAmbient"></div>
+        <div class="glass"></div>
+        <div class="ip-body">
+          <div class="ip-head"><span id="ipTitle">Track info</span><span class="ip-badge" id="ipExplicit">E</span></div>
+          <dl class="ip-list" id="ipList"></dl>
+          <div class="ip-note" id="ipNote"></div>
+        </div>
+      </div>
+
       <div id="analyzer" class="analyzer">
         <div class="glass"></div>
         <div class="an-body">
           <div class="an-main">
             <div class="an-head"><span>Stereo spectrum</span><span>L &#9650; &middot; R &#9660;</span></div>
             <canvas id="anSpectrum"></canvas>
-            <div class="an-head an-head2"><span>Spectrogram</span><span>Low &rarr; High</span></div>
-            <canvas id="anGram" width="420" height="64"></canvas>
-            <div class="an-head an-head2"><span>Loudness</span><span>30 s</span></div>
-            <canvas id="anLoud"></canvas>
+            <div class="an-head an-head2 an-x"><span>Spectrogram</span><span>Low &rarr; High</span></div>
+            <canvas class="an-x" id="anGram" width="420" height="64"></canvas>
+            <div class="an-head an-head2 an-loud"><span>Loudness</span><span>30 s</span></div>
+            <canvas class="an-loud" id="anLoud"></canvas>
             <div class="an-device" id="anDevice"></div>
           </div>
           <div class="an-side">
             <div class="an-tempo">
-              <span class="an-label">Tempo</span>
+              <div class="an-tlab"><span class="an-label">Tempo</span><span class="an-ref" id="anRef"></span></div>
               <div class="an-bpm"><span class="an-beats" id="anBeats"><i></i><i></i><i></i><i></i></span><b id="anBpm">--</b><span>BPM</span><div class="an-conf"><div id="anConf"></div></div></div>
             </div>
             <div class="an-meters">
               <div class="an-row"><span>L</span><div class="an-meter"><div id="anL"></div><i id="anLp"></i></div><em class="an-over" id="anLo"></em></div>
               <div class="an-row"><span>R</span><div class="an-meter"><div id="anR"></div><i id="anRp"></i></div><em class="an-over" id="anRo"></em></div>
-              <div class="an-row"><span>Bal</span><div class="an-meter an-bal"><i id="anBal"></i></div></div>
-              <div class="an-row"><span>Wid</span><div class="an-meter"><div id="anWid"></div></div></div>
+              <div class="an-row an-x"><span>Bal</span><div class="an-meter an-bal"><i id="anBal"></i></div></div>
+              <div class="an-row an-x"><span>Wid</span><div class="an-meter"><div id="anWid"></div></div></div>
             </div>
-            <div class="an-stats">
+            <div class="an-stats an-x">
               <div class="an-tone">
                 <canvas id="anTone"></canvas>
                 <div class="an-tone-cap"><span>Tonal balance</span><span id="anTilt">--</span></div>
               </div>
               <div><b id="anDr">--</b><span>DR dB</span></div>
               <div><b id="anSim">--</b><span>L/R sim</span></div>
-              <div><b id="anPeak">--</b><span>Peak</span></div>
+              <div><b id="anRg">--</b><span>RG dB</span></div>
               <div><b id="anLeft">--</b><span>Left</span></div>
             </div>
           </div>
@@ -117,8 +130,10 @@
        registered synchronously here, not in window.onload. -->
   <script src="js/palette.js"></script>
   <script src="js/flow.js"></script>
+  <script src="js/character.js"></script>
   <script src="js/analyzer.js"></script>
   <script src="js/lyrics.js"></script>
+  <script src="js/trackinfo.js"></script>
   <script src="js/app.js"></script>
   <script src="js/settings.js"></script>
 </body>

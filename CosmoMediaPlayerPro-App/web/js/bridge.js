@@ -83,7 +83,12 @@
     var b = el && el.closest ? el.closest('[data-cmd],[data-ui]') : null;
     if (b && b.disabled) b = null;
     setHot(b, type === 'down');
-    if (!b) return;
+    if (!b) {
+      // Not a button: the page still hears the click (the track info panel opens with the "i" on the
+      // card and closes with a click on the card, both found by position).
+      if (type === 'click') window.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y }));
+      return;
+    }
     if (type === 'down' && b.hasAttribute('data-slider') && window.cosmoSliderDrag) drag = window.cosmoSliderDrag(b, x);
     if (type === 'click') {
       if (b.hasAttribute('data-cmd')) window.cosmoMedia(b.getAttribute('data-cmd'));
@@ -99,7 +104,7 @@
     var w = window.innerWidth, h = window.innerHeight, out = [];
     if (!w || !h) return;
     var panel = document.querySelector('.settings.open');
-    var list = Array.prototype.slice.call(document.querySelectorAll('[data-cmd]:not([disabled]),.controls [data-ui]'));
+    var list = Array.prototype.slice.call(document.querySelectorAll('[data-cmd]:not([disabled]),.controls [data-ui],#infoBtn.ready'));
     if (panel) list.push(panel);
     list.forEach(function (e) {
       var r = e.getBoundingClientRect();

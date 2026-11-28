@@ -22,6 +22,7 @@ window.Analyzer = (function () {
   var lastTempoAt = 0, lastStoreAt = 0;
   var fluxAvg = 0, beat = 0, lastBeatAt = 0;
   var bpmHist = [], bpmShown = 0, bpmConf = 0;
+  var refBpm = 0;   // the track's tempo from a music catalog, when known
   /* ── beat position: a clock locked to the detected onsets ── */
   var beatT0 = 0, beatMiss = 0, barAcc = [0, 0, 0, 0];
   /* ── tonal balance: the spectrum averaged over ~10 s ── */
@@ -42,7 +43,7 @@ window.Analyzer = (function () {
     bpm: $('anBpm'), beats: $('anBeats').children, conf: $('anConf'), lo: $('anLo'), ro: $('anRo'), tilt: $('anTilt'),
     l: $('anL'), r: $('anR'), lp: $('anLp'), rp: $('anRp'),
     bal: $('anBal'), wid: $('anWid'),
-    dr: $('anDr'), sim: $('anSim'), peak: $('anPeak'), left: $('anLeft')
+    dr: $('anDr'), sim: $('anSim'), rg: $('anRg'), ref: $('anRef'), left: $('anLeft')
   };
   var m = { l: 0, r: 0, lp: 0, rp: 0, lpAt: 0, rpAt: 0, bal: 0, wid: 0, low: 0, mid: 0, high: 0, bright: 0,
             sim: 0, peakBand: -1, dr: 0 };
@@ -279,6 +280,12 @@ window.Analyzer = (function () {
     var sorted = bpmHist.slice().sort(function (p, q) { return p - q; });
     var before = bpmShown;
     bpmShown = sorted[Math.floor(sorted.length / 2)];
+    // With the catalog tempo known, fix the usual half / double-time misreading.
+    if (refBpm) {
+      var ratio = refBpm / bpmShown;
+      if (Math.abs(ratio - 2) < 0.08) bpmShown *= 2;
+      else if (Math.abs(ratio - 0.5) < 0.02) bpmShown /= 2;
+    }
     // Confidence: how closely the recent estimates agree, and how many there are yet.
     var dev = bpmHist.map(function (v) { return Math.abs(v - bpmShown); }).sort(function (p, q) { return p - q; });
     var mad = dev[Math.floor(dev.length / 2)] / bpmShown;
@@ -413,7 +420,6 @@ window.Analyzer = (function () {
       el.ro.classList.toggle('on', now - overR < 1200);
       el.dr.textContent = m.dr > 0 ? m.dr.toFixed(1) : '--';
       el.sim.textContent = tot > 0.05 ? Math.round(m.sim * 100) : '--';
-      el.peak.textContent = m.peakBand >= 0 ? 'B' + (m.peakBand + 1) : '--';
       el.left.textContent = dur > 0 ? '-' + fmtTime(dur - pos) : '--';
       // A gap in the audio makes the stored envelope useless, so drop it, but keep the
       // tempo on screen: it is still right for this track. Clear it only after real silence.
@@ -438,5 +444,21 @@ window.Analyzer = (function () {
     for (var i = 0; i < N; i++) tone[i] = 0;      // a new track gets its own tonal balance
   }
 
-  return { onAudio: onAudio, frame: frame, setColors: setColors, setEnabled: setEnabled, resetTempo: resetTempo };
+  /* Catalog values for the current track: reference tempo and ReplayGain (dB). */
+  function setReference(bpm, gain) {
+    refBpm = bpm > 0 ? bpm : 0;
+    el.ref.textContent = refBpm ? 'Ref ' + Math.round(refBpm) : '';
+    el.rg.textContent = typeof gain === 'number' ? (gain > 0 ? '+' : '') + gain.toFixed(1) : '--';
+  }
+
+  /* Beat clock for animations: phase within the current beat when locked, else the onset flash. */
+  function getBeat(now) {
+    if (enabled && bpmShown && beatT0 && now - lastAt < 400) {
+      var ph = ((now - beatT0) / (60000 / bpmShown)) % 1;
+      return { locked: true, phase: ph < 0 ? ph + 1 : ph, conf: bpmConf, onset: beat, bpm: bpmShown };
+    }
+    return { locked: false, phase: 0, conf: 0, onset: beat, bpm: 0 };
+  }
+
+  return { getBeat: getBeat, onAudio: onAudio, frame: frame, setColors: setColors, setEnabled: setEnabled, resetTempo: resetTempo, setReference: setReference };
 })();

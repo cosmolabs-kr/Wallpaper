@@ -371,7 +371,7 @@ body.hide-analyzer .analyzer {
   opacity: 0;
   margin-top: calc(-1.7 * var(--u));
 }
-body.hide-idle .player.is-idle + .analyzer { opacity: 0; }
+body.hide-idle .player.is-idle ~ .analyzer { opacity: 0; }
 
 .an-body {
   position: relative;
@@ -643,11 +643,11 @@ body.app .controls {
 
 .settings {
   position: fixed;
-  left: 3vh;
+  right: 3vh;   /* opens on the right side of the screen */
   top: 50%;
   width: 92vh;
   max-width: calc(100vw - 6vh);
-  transform: translateY(-50%) translateX(-4vh);
+  transform: translateY(-50%) translateX(4vh);
   padding: 2vh 2.2vh 1.6vh;
   border-radius: 2.2vh;
   font-size: 1.45vh;
@@ -707,7 +707,7 @@ body.has-bgimage #lyrics { --fg: 246, 247, 250; --halo: 0, 0, 0 !important; }
 body.has-bgimage:not(.clock-glass) #clock { --fg: 246, 247, 250; text-shadow: 0 0 calc(1.2 * var(--b)) rgba(0, 0, 0, .55); }
 
 body.hide-paused .player.is-paused { opacity: 0; }
-body.hide-paused .player.is-paused + .analyzer { opacity: 0; }
+body.hide-paused .player.is-paused ~ .analyzer { opacity: 0; }
 
 /* Settings panel: file row */
 .st-file { display: flex; gap: .4vh; }
@@ -730,6 +730,199 @@ body.clock-glass.no-blur #clock { -webkit-backdrop-filter: none; backdrop-filter
 #clock[data-font="serif"] { font-family: "Georgia", "Cambria", "Times New Roman", serif; }
 #clock[data-font="rounded"] { font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; }
 #clock[data-font="rounded"] #clockTime { font-weight: 600; }
+
+/* ───────── Player style ───────── */
+/* No vinyl: the text column moves in next to the cover. */
+body.no-vinyl .vinyl { display: none; }
+body.no-vinyl .player { width: calc((20.5 + var(--info-w, 16.2)) * var(--u)); }
+body.no-vinyl .info { left: calc(18.6 * var(--u)); }
+
+/* Compact: a smaller card with cover, title, artist and timeline; no vinyl, no album line. */
+body.compact .player { width: calc((15.5 + var(--info-w, 16.2)) * var(--u)); height: calc(10 * var(--u)); }
+body.compact .vinyl, body.compact .album { display: none; }
+body.compact .cover {
+  left: calc(1 * var(--u));
+  width: calc(11 * var(--u));
+  height: calc(11 * var(--u));
+  border-radius: calc(.95 * var(--u));
+}
+body.compact .info { left: calc(13.6 * var(--u)); top: calc(1.15 * var(--u)); bottom: calc(1.1 * var(--u)); }
+body.compact .meta { margin-top: calc(.45 * var(--u)); }
+body.compact #spectrum { height: calc(1.2 * var(--u)); margin-top: calc(.45 * var(--u)); }
+body.compact .glass, body.compact .analyzer { border-radius: calc(1.4 * var(--u)); }
+
+/* ───────── Analyzer layout ───────── */
+/* simple: stereo spectrum, loudness, tempo and L/R meters. */
+#analyzer[data-layout="simple"] .an-x { display: none; }
+#analyzer[data-layout="simple"] .an-side { justify-content: flex-start; gap: calc(1.4 * var(--u)); }
+/* spectrum: the stereo spectrum alone, full width. */
+#analyzer[data-layout="spectrum"] .an-x,
+#analyzer[data-layout="spectrum"] .an-loud,
+#analyzer[data-layout="spectrum"] .an-side { display: none; }
+#analyzer[data-layout="spectrum"] .an-body { grid-template-columns: minmax(0, 1fr); }
+
+/* Catalog tempo under the Tempo label. */
+.an-tlab { display: flex; flex-direction: column; gap: calc(.25 * var(--u)); }
+.an-ref {
+  font-size: calc(.45 * var(--u));
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgb(var(--accent));
+  font-variant-numeric: tabular-nums;
+}
+
+/* ───────── Track info panel ───────── */
+/* Beside the card (left of it when the player sits near the right edge). It does not
+   take part in the rig's layout, so opening it never moves the player. */
+.infopanel {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 1.7 * var(--u));
+  width: calc(17 * var(--u));
+  height: calc(14 * var(--u));
+  opacity: 0;
+  transform: translateX(calc(-2 * var(--u)));
+  transition: opacity .6s ease, transform .8s cubic-bezier(.2, .8, .2, 1);
+}
+.rig.info-left .infopanel { left: auto; right: calc(100% + 1.7 * var(--u)); transform: translateX(calc(2 * var(--u))); }
+body.info-open .rig .infopanel { opacity: 1; transform: none; }
+body.info-open .player.is-idle ~ .infopanel,
+body.hide-paused .player.is-paused ~ .infopanel { opacity: 0; }
+body.compact .infopanel { height: calc(10 * var(--u)); }
+
+.ip-body {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: calc(1.2 * var(--u)) calc(1.5 * var(--u));
+  overflow: hidden;
+}
+.ip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: calc(.75 * var(--u));
+  font-size: calc(.5 * var(--u));
+  font-weight: 650;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: rgba(var(--fg), .5);
+}
+.ip-badge {
+  display: none;
+  padding: calc(.08 * var(--u)) calc(.3 * var(--u));
+  border-radius: calc(.2 * var(--u));
+  background: rgba(var(--fg), .7);
+  color: rgb(var(--glass));
+  letter-spacing: 0;
+  font-size: calc(.45 * var(--u));
+}
+.ip-badge.on { display: inline-block; }
+.ip-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: calc(.42 * var(--u)) calc(.9 * var(--u));
+}
+.ip-list dt {
+  font-size: calc(.45 * var(--u));
+  font-weight: 650;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: rgba(var(--fg), .5);
+  white-space: nowrap;
+}
+.ip-list dd {
+  margin: 0;
+  min-width: 0;
+  font-size: calc(.72 * var(--u));
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The compact card is shorter: the first five rows. */
+body.compact .ip-list > :nth-child(n+11) { display: none; }
+.ip-note {
+  margin-top: auto;
+  font-size: calc(.6 * var(--u));
+  color: rgba(var(--fg), .5);
+}
+
+/* ───────── Info button (card corner) ───────── */
+.info-btn {
+  position: absolute;
+  top: calc(1.15 * var(--u));
+  right: calc(1.35 * var(--u));
+  width: calc(1.05 * var(--u));
+  height: calc(1.05 * var(--u));
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  opacity: 0;
+  transform: scale(.6);
+  transition: opacity .5s ease, transform .22s cubic-bezier(.2, .8, .2, 1), background-color .22s ease, box-shadow .22s ease, filter .22s ease;
+}
+.info-btn span {
+  font-size: calc(.62 * var(--u));
+  font-weight: 700;
+  font-style: italic;
+  font-family: "Georgia", "Cambria", serif;
+  line-height: 1;
+  color: rgba(var(--fg), .75);
+  opacity: 0;
+  transition: opacity .4s ease, color .5s ease;
+}
+/* Looking up: a thin spinning ring. */
+.info-btn.loading { opacity: .7; transform: none; }
+.info-btn.loading::before {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  border: max(1px, calc(.1 * var(--u))) solid rgba(var(--fg), .2);
+  border-top-color: rgb(var(--accent));
+  animation: spin .9s linear infinite;
+}
+/* Found: an "i" that lights up while the panel is open. */
+.info-btn.ready { opacity: 1; transform: none; background: rgba(var(--fg), .08); box-shadow: inset 0 0 0 1px rgba(var(--fg), .22); }
+.info-btn.ready span { opacity: 1; }
+body.info-open .info-btn.ready { background: rgb(var(--accent)); box-shadow: none; }
+body.info-open .info-btn.ready span { color: rgb(var(--glass)); }
+body.compact .info-btn { top: calc(1 * var(--u)); right: calc(1.1 * var(--u)); }
+.player.is-idle .info-btn { opacity: 0; }
+
+/* ───────── Character background (prototype) ───────── */
+#charBg { position: fixed; inset: 0; width: 100%; height: 100%; display: none; }
+body.bg-character #charBg { display: block; }
+
+body.bg-character.has-bgimage #charBg { display: none; }
+
+/* ───────── Character background (prototype) ───────── */
+#charBg { position: fixed; inset: 0; width: 100%; height: 100%; display: none; }
+body.bg-character #charBg { display: block; }
+
+body.bg-character.has-bgimage #charBg { display: none; }
+/* The info panel gets the card's cover glow under its glass, so the two read as a set. */
+.player.has-art ~ .infopanel .ambient { opacity: .42; }
+/* Hover (set from script): the button lifts, brightens and gets a ring, so it reads as
+   something to press. */
+.info-btn.ready.hover {
+  transform: scale(1.22);
+  background: rgba(var(--fg), .2);
+  box-shadow: inset 0 0 0 1.5px rgb(var(--accent)), 0 0 calc(.9 * var(--u)) rgba(var(--accent), .55);
+}
+.info-btn.ready.hover span { color: rgb(var(--fg)); }
+body.info-open .info-btn.ready.hover { background: rgb(var(--accent)); filter: brightness(1.2); }
+body.info-open .info-btn.ready.hover span { color: rgb(var(--glass)); }
+/* The hide options cover the lyrics too. */
+body.hide-idle.media-idle #lyrics.on,
+body.hide-paused.media-paused #lyrics.on { opacity: 0; }
 
 /* Two columns of options; a row never splits across them. */
 .st-list { column-count: 2; column-gap: 4vh; }
